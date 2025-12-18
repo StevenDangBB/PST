@@ -3,13 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PST - Pool Scoring Tool</title>
+    <title>PST - Real-time Pool Scoring Tool</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase Libraries -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        window.FirebaseSDK = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, setDoc, onSnapshot };
+    </script>
     <!-- Thư viện hiệu ứng pháo giấy -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <!-- Fonts -->
@@ -19,109 +27,46 @@
         .glass-effect { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
         input[type="number"]::-webkit-inner-spin-button, 
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Cấu hình API Gemini ---
-        const apiKey = ""; 
-        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+        // --- Cấu hình Firebase & App ID ---
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'pst-tool-v2';
+        const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, setDoc, onSnapshot } = window.FirebaseSDK;
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        // Định nghĩa các Icon SVG bằng React - Đã sửa lỗi bọc các phần tử kề nhau
+        // Biến lưu Session ID từ URL Hash (mặc định là 'lobby')
+        const getSessionId = () => window.location.hash.replace('#', '') || 'lobby';
+
+        // Định nghĩa Icon SVG (Fragment fix applied)
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 plus: <path d="M12 5v14M5 12h14" />,
                 minus: <path d="M5 12h14" />,
-                user: (
-                    <>
-                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                    </>
-                ),
-                users: (
-                    <>
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                    </>
-                ),
-                refresh: (
-                    <>
-                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                        <path d="M21 3v5h-5" />
-                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                        <path d="M3 21v-5h5" />
-                    </>
-                ),
-                trophy: (
-                    <>
-                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                        <path d="M4 22h16" />
-                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                    </>
-                ),
-                calc: (
-                    <>
-                        <rect width="16" height="20" x="4" y="2" rx="2" />
-                        <line x1="8" x2="16" y1="6" y2="6" />
-                        <line x1="16" x2="16" y1="14" y2="18" />
-                        <path d="M16 10h.01" />
-                        <path d="M12 10h.01" />
-                        <path d="M8 10h.01" />
-                        <path d="M12 14h.01" />
-                        <path d="M8 14h.01" />
-                        <path d="M12 18h.01" />
-                        <path d="M8 18h.01" />
-                    </>
-                ),
-                sun: (
-                    <>
-                        <circle cx="12" cy="12" r="4" />
-                        <path d="M12 2v2" />
-                        <path d="M12 20v2" />
-                        <path d="M4.93 4.93l1.41 1.41" />
-                        <path d="M17.66 17.66l1.41 1.41" />
-                        <path d="M2 12h2" />
-                        <path d="M20 12h2" />
-                        <path d="M6.34 17.66l-1.41 1.41" />
-                        <path d="M19.07 4.93l-1.41 1.41" />
-                    </>
-                ),
+                user: (<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>),
+                users: (<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
+                refresh: (<><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></>),
+                trophy: (<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>),
+                calc: (<><rect width="16" height="20" x="4" y="2" rx="2" /><line x1="8" x2="16" y1="6" y2="6" /><line x1="16" x2="16" y1="14" y2="18" /><path d="M16 10h.01" /><path d="M12 10h.01" /><path d="M8 10h.01" /><path d="M12 14h.01" /><path d="M8 14h.01" /><path d="M12 18h.01" /><path d="M8 18h.01" /></>),
+                sun: (<><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="M4.93 4.93l1.41 1.41" /><path d="M17.66 17.66l1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="M6.34 17.66l-1.41 1.41" /><path d="M19.07 4.93l-1.41 1.41" /></>),
                 moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
-                undo: (
-                    <>
-                        <path d="M3 7V5c0-1.1.9-2 2-2h2" />
-                        <path d="M3 17v2c0 1.1.9 2 2 2h2" />
-                        <path d="M17 3h2c1.1 0 2 .9 2 2v2" />
-                        <path d="M21 17v2c0 1.1-.9 2-2 2h-2" />
-                        <path d="M9 13l-3-3 3-3" />
-                        <path d="M6 10h9a4 4 0 0 1 0 8h-2" />
-                    </>
-                ),
-                target: (
-                    <>
-                        <circle cx="12" cy="12" r="10" />
-                        <circle cx="12" cy="12" r="6" />
-                        <circle cx="12" cy="12" r="2" />
-                    </>
-                ),
-                trash: (
-                    <>
-                        <path d="M3 6h18" />
-                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                    </>
-                ),
-                sparkle: <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />,
-                check: <path d="M20 6 9 17l-5-5" />
+                undo: (<><path d="M3 7V5c0-1.1.9-2 2-2h2" /><path d="M3 17v2c0 1.1.9 2 2 2h2" /><path d="M17 3h2c1.1 0 2 .9 2 2v2" /><path d="M21 17v2c0 1.1-.9 2-2 2h-2" /><path d="M9 13l-3-3 3-3" /><path d="M6 10h9a4 4 0 0 1 0 8h-2" /></>),
+                target: (<><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>),
+                trash: (<><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></>),
+                check: <path d="M20 6 9 17l-5-5" />,
+                share: <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -131,26 +76,86 @@
         };
 
         const App = () => {
+            const [user, setUser] = useState(null);
+            const [sessionId, setSessionId] = useState(getSessionId());
             const [theme, setTheme] = useState('light');
             const [activeView, setActiveView] = useState('score');
-            const [gameMode, setGameMode] = useState('1vs1');
-            const [raceTo, setRaceTo] = useState(7);
-            const [unitPrice, setUnitPrice] = useState(10000);
-            const [tableBill, setTableBill] = useState(0);
-            const [splitMode, setSplitMode] = useState('73');
             const [winner, setWinner] = useState(null);
-            const [lastSession, setLastSession] = useState(null);
+            const [lastSessionBackup, setLastSessionBackup] = useState(null);
+            const [syncing, setSyncing] = useState(false);
 
-            const [players1vs1, setPlayers1vs1] = useState([
-                { id: 1, name: 'PLAYER 01', score: 0, personal: 0 },
-                { id: 2, name: 'PLAYER 02', score: 0, personal: 0 },
-            ]);
+            // Game State (Will be synced with Firebase)
+            const [gameData, setGameData] = useState({
+                gameMode: '1vs1',
+                raceTo: 7,
+                unitPrice: 10000,
+                tableBill: 0,
+                splitMode: '73',
+                players1vs1: [
+                    { id: 1, name: 'PLAYER 01', score: 0, personal: 0 },
+                    { id: 2, name: 'PLAYER 02', score: 0, personal: 0 },
+                ],
+                playersDen: [
+                    { id: 1, name: 'PLAYER A', score: 0, personal: 0 },
+                    { id: 2, name: 'PLAYER B', score: 0, personal: 0 },
+                    { id: 3, name: 'PLAYER C', score: 0, personal: 0 },
+                ]
+            });
 
-            const [playersDen, setPlayersDen] = useState([
-                { id: 1, name: 'PLAYER A', score: 0, personal: 0 },
-                { id: 2, name: 'PLAYER B', score: 0, personal: 0 },
-                { id: 3, name: 'PLAYER C', score: 0, personal: 0 },
-            ]);
+            // 1. Auth Init (Rule 3)
+            useEffect(() => {
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                };
+                initAuth();
+                const unsubscribe = onAuthStateChanged(auth, setUser);
+                
+                // Watch for URL changes for multi-table support
+                const handleHashChange = () => setSessionId(getSessionId());
+                window.addEventListener('hashchange', handleHashChange);
+                
+                return () => {
+                    unsubscribe();
+                    window.removeEventListener('hashchange', handleHashChange);
+                };
+            }, []);
+
+            // 2. Data Fetching (Rule 1 & Rule 3)
+            useEffect(() => {
+                if (!user) return;
+                setSyncing(true);
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
+                
+                const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setGameData(docSnap.data());
+                    } else {
+                        // Init new session if not exists
+                        setDoc(docRef, gameData);
+                    }
+                    setSyncing(false);
+                }, (error) => {
+                    console.error("Firestore sync error:", error);
+                    setSyncing(false);
+                });
+
+                return () => unsubscribe();
+            }, [user, sessionId]);
+
+            // Helper to save data to cloud
+            const saveToCloud = async (newData) => {
+                if (!user) return;
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
+                    await setDoc(docRef, newData);
+                } catch (e) {
+                    console.error("Error saving data:", e);
+                }
+            };
 
             const playerColors = [
                 { card: theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50', bar: 'bg-blue-500', btn: 'bg-blue-600' },
@@ -163,99 +168,109 @@
                 { card: theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50', bar: 'bg-teal-500', btn: 'bg-teal-600' },
             ];
 
-            const handleConfetti = () => {
-                confetti({
-                    particleCount: 150,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: theme === 'dark' ? ['#d946ef', '#06b6d4', '#8b5cf6'] : ['#a21caf', '#0891b2', '#6d28d9']
-                });
-            };
-
             const updateScore = (mode, id, delta) => {
                 if (winner) return;
+                const newData = { ...gameData };
                 if (mode === '1vs1') {
-                    const newPlayers = players1vs1.map(p => {
+                    newData.players1vs1 = gameData.players1vs1.map(p => {
                         if (p.id === id) {
                             const newScore = Math.max(0, p.score + delta);
-                            if (newScore === raceTo && raceTo > 0) {
+                            if (newScore === gameData.raceTo && gameData.raceTo > 0) {
                                 setWinner(p.name);
-                                handleConfetti();
+                                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
                             }
                             return { ...p, score: newScore };
                         }
                         return p;
                     });
-                    setPlayers1vs1(newPlayers);
                 } else {
-                    setPlayersDen(playersDen.map(p => p.id === id ? { ...p, score: p.score + delta } : p));
+                    newData.playersDen = gameData.playersDen.map(p => p.id === id ? { ...p, score: p.score + delta } : p);
                 }
+                setGameData(newData);
+                saveToCloud(newData);
             };
 
             const editName = (mode, id, newName) => {
-                if (mode === '1vs1') setPlayers1vs1(players1vs1.map(p => p.id === id ? { ...p, name: newName } : p));
-                else setPlayersDen(playersDen.map(p => p.id === id ? { ...p, name: newName } : p));
+                const newData = { ...gameData };
+                if (mode === '1vs1') newData.players1vs1 = gameData.players1vs1.map(p => p.id === id ? { ...p, name: newName } : p);
+                else newData.playersDen = gameData.playersDen.map(p => p.id === id ? { ...p, name: newName } : p);
+                setGameData(newData);
+                saveToCloud(newData);
             };
 
             const addPlayerDen = () => {
                 const newId = Date.now();
-                setPlayersDen([...playersDen, { id: newId, name: `PLAYER ${String.fromCharCode(65 + playersDen.length)}`, score: 0, personal: 0 }]);
+                const newData = { ...gameData };
+                newData.playersDen = [...gameData.playersDen, { id: newId, name: `PLAYER ${String.fromCharCode(65 + gameData.playersDen.length)}`, score: 0, personal: 0 }];
+                setGameData(newData);
+                saveToCloud(newData);
             };
 
             const removePlayerDen = (id) => {
-                if (playersDen.length > 2) setPlayersDen(playersDen.filter(p => p.id !== id));
+                if (gameData.playersDen.length <= 2) return;
+                const newData = { ...gameData };
+                newData.playersDen = gameData.playersDen.filter(p => p.id !== id);
+                setGameData(newData);
+                saveToCloud(newData);
             };
 
             const resetAllData = () => {
-                setLastSession({ raceTo, unitPrice, tableBill, splitMode, players1vs1, playersDen, gameMode });
+                setLastSessionBackup(gameData);
+                const newData = {
+                    ...gameData,
+                    tableBill: 0,
+                    players1vs1: [{ id: 1, name: 'PLAYER 01', score: 0, personal: 0 }, { id: 2, name: 'PLAYER 02', score: 0, personal: 0 }],
+                    playersDen: [{ id: 1, name: 'PLAYER A', score: 0, personal: 0 }, { id: 2, name: 'PLAYER B', score: 0, personal: 0 }, { id: 3, name: 'PLAYER C', score: 0, personal: 0 }]
+                };
                 setWinner(null);
-                setTableBill(0);
-                setPlayers1vs1([{ id: 1, name: 'PLAYER 01', score: 0, personal: 0 }, { id: 2, name: 'PLAYER 02', score: 0, personal: 0 }]);
-                setPlayersDen([{ id: 1, name: 'PLAYER A', score: 0, personal: 0 }, { id: 2, name: 'PLAYER B', score: 0, personal: 0 }, { id: 3, name: 'PLAYER C', score: 0, personal: 0 }]);
+                setGameData(newData);
+                saveToCloud(newData);
             };
 
             const recallData = () => {
-                if (!lastSession) return;
-                setRaceTo(lastSession.raceTo);
-                setUnitPrice(lastSession.unitPrice);
-                setTableBill(lastSession.tableBill);
-                setSplitMode(lastSession.splitMode);
-                setPlayers1vs1(lastSession.players1vs1);
-                setPlayersDen(lastSession.playersDen);
-                setGameMode(lastSession.gameMode);
-                setLastSession(null);
+                if (!lastSessionBackup) return;
+                setGameData(lastSessionBackup);
+                saveToCloud(lastSessionBackup);
+                setLastSessionBackup(null);
             };
 
-            const denSum = useMemo(() => playersDen.reduce((acc, p) => acc + p.score, 0), [playersDen]);
+            const denSum = useMemo(() => gameData.playersDen.reduce((acc, p) => acc + p.score, 0), [gameData.playersDen]);
             const isDenValid = denSum === 0;
 
             const billingData = useMemo(() => {
-                const players = gameMode === '1vs1' ? players1vs1 : playersDen;
+                const players = gameData.gameMode === '1vs1' ? gameData.players1vs1 : gameData.playersDen;
                 const n = players.length;
-                if (gameMode === '1vs1') {
+                if (gameData.gameMode === '1vs1') {
                     const [p1, p2] = players;
                     let p1Table, p2Table;
-                    if (splitMode === 'equal' || p1.score === p2.score) {
-                        p1Table = p2Table = tableBill / 2;
+                    if (gameData.splitMode === 'equal' || p1.score === p2.score) {
+                        p1Table = p2Table = gameData.tableBill / 2;
                     } else {
                         const p1Win = p1.score > p2.score;
-                        p1Table = p1Win ? tableBill * 0.3 : tableBill * 0.7;
-                        p2Table = !p1Win ? tableBill * 0.3 : tableBill * 0.7;
+                        p1Table = p1Win ? gameData.tableBill * 0.3 : gameData.tableBill * 0.7;
+                        p2Table = !p1Win ? gameData.tableBill * 0.3 : gameData.tableBill * 0.7;
                     }
                     return [
                         { ...p1, tableShare: p1Table, total: p1Table + p1.personal },
                         { ...p2, tableShare: p2Table, total: p2Table + p2.personal }
                     ];
                 } else {
-                    const tableShareEach = tableBill / n;
+                    const tableShareEach = gameData.tableBill / n;
                     return players.map(p => ({
                         ...p,
                         tableShare: tableShareEach,
-                        gameExchange: -(p.score * unitPrice),
-                        total: tableShareEach - (p.score * unitPrice) + p.personal
+                        gameExchange: -(p.score * gameData.unitPrice),
+                        total: tableShareEach - (p.score * gameData.unitPrice) + p.personal
                     }));
                 }
-            }, [gameMode, players1vs1, playersDen, tableBill, splitMode, unitPrice]);
+            }, [gameData]);
+
+            const shareRoom = () => {
+                const url = window.location.href;
+                document.execCommand('copy'); // Fallback for some environments
+                navigator.clipboard.writeText(url);
+                // No alert, just a visual cue
+            };
 
             const themeClasses = theme === 'dark' ? 'bg-[#0a0510] text-slate-100' : 'bg-slate-50 text-slate-900';
             const glassPanel = theme === 'dark' ? 'bg-white/[0.03] border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)]' : 'bg-white/70 border-slate-200 shadow-[0_8px_32px_rgba(0,0,0,0.05)]';
@@ -265,16 +280,20 @@
                 <div className={`h-screen flex flex-col transition-colors duration-500 ${themeClasses} overflow-hidden`}>
                     <header className={`px-6 py-4 flex justify-between items-center ${glassPanel} glass-effect border-b z-50`}>
                         <div className="flex items-center gap-3">
-                            <div className="bg-fuchsia-600 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg rotate-3">
+                            <div className="bg-fuchsia-600 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg rotate-3 relative">
                                 <Icon name="target" className="text-white" />
+                                {syncing && <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>}
                             </div>
                             <div>
-                                <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">PST TOOL</h1>
-                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400">Pool Scoring</span>
+                                <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent uppercase">PST LIVE</h1>
+                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400 flex items-center gap-1">
+                                    ROOM: {sessionId} 
+                                </span>
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            {lastSession && <button onClick={recallData} className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 animate-pulse"><Icon name="undo" size={18} /></button>}
+                            <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Copy Link to Share"><Icon name="share" size={18} /></button>
+                            {lastSessionBackup && <button onClick={recallData} className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 animate-pulse"><Icon name="undo" size={18} /></button>}
                             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`p-2.5 rounded-2xl ${subPanel}`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} /></button>
                             <button onClick={resetAllData} className={`p-2.5 rounded-2xl ${subPanel} text-fuchsia-500`}><Icon name="refresh" size={18} /></button>
                         </div>
@@ -290,9 +309,9 @@
                             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl p-6">
                                 <div className={`w-full max-w-sm p-12 rounded-[3.5rem] text-center border-2 border-fuchsia-500/30 ${glassPanel} glass-effect`}>
                                     <div className="bg-fuchsia-600 w-24 h-24 rounded-[2rem] mx-auto flex items-center justify-center mb-8 shadow-2xl rotate-6"><Icon name="trophy" size={48} className="text-white" /></div>
-                                    <h2 className="text-4xl font-black mb-2 italic text-white">VICTORY!</h2>
+                                    <h2 className="text-4xl font-black mb-2 italic text-white uppercase">Victory!</h2>
                                     <p className="text-2xl text-fuchsia-400 font-bold uppercase mb-10 tracking-wider">{winner}</p>
-                                    <button onClick={() => setWinner(null)} className="w-full py-5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white font-black rounded-3xl shadow-xl">CONTINUE</button>
+                                    <button onClick={() => setWinner(null)} className="w-full py-5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white font-black rounded-3xl shadow-xl">BACK</button>
                                 </div>
                             </div>
                         )}
@@ -302,16 +321,16 @@
                                 <div className={`p-4 rounded-[2rem] flex flex-col items-center justify-center ${glassPanel} glass-effect border`}>
                                     <div className="flex flex-col items-center gap-3 w-full">
                                         <div className={`flex p-1 rounded-2xl w-32 ${subPanel}`}>
-                                            <button onClick={() => setGameMode('1vs1')} className={`flex-1 py-2 rounded-xl flex justify-center ${gameMode === '1vs1' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="user" size={18} /></button>
-                                            <button onClick={() => setGameMode('den')} className={`flex-1 py-2 rounded-xl flex justify-center ${gameMode === 'den' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="users" size={18} /></button>
+                                            <button onClick={() => { const d = {...gameData, gameMode: '1vs1'}; setGameData(d); saveToCloud(d); }} className={`flex-1 py-2 rounded-xl flex justify-center ${gameData.gameMode === '1vs1' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="user" size={18} /></button>
+                                            <button onClick={() => { const d = {...gameData, gameMode: 'den'}; setGameData(d); saveToCloud(d); }} className={`flex-1 py-2 rounded-xl flex justify-center ${gameData.gameMode === 'den' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="users" size={18} /></button>
                                         </div>
-                                        {gameMode === '1vs1' ? (
+                                        {gameData.gameMode === '1vs1' ? (
                                             <div className="flex flex-col items-center gap-1">
                                                 <span className="text-[10px] font-black uppercase opacity-40">Race To</span>
                                                 <div className="flex items-center gap-10">
-                                                    <button onClick={() => setRaceTo(Math.max(1, raceTo - 1))} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="minus" size={18} /></button>
-                                                    <span className="text-6xl font-black text-fuchsia-500 drop-shadow-md">{raceTo}</span>
-                                                    <button onClick={() => setRaceTo(raceTo + 1)} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="plus" size={18} /></button>
+                                                    <button onClick={() => { const d = {...gameData, raceTo: Math.max(1, gameData.raceTo - 1)}; setGameData(d); saveToCloud(d); }} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="minus" size={18} /></button>
+                                                    <span className="text-6xl font-black text-fuchsia-500 drop-shadow-md">{gameData.raceTo}</span>
+                                                    <button onClick={() => { const d = {...gameData, raceTo: gameData.raceTo + 1}; setGameData(d); saveToCloud(d); }} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="plus" size={18} /></button>
                                                 </div>
                                             </div>
                                         ) : (
@@ -323,20 +342,20 @@
                                     </div>
                                 </div>
 
-                                <div className="flex-1 flex flex-col gap-4 pb-4 overflow-hidden">
-                                    {(gameMode === '1vs1' ? players1vs1 : playersDen).map((p, idx) => {
+                                <div className="flex-1 flex flex-col gap-4 pb-4 overflow-y-auto pr-1">
+                                    {(gameData.gameMode === '1vs1' ? gameData.players1vs1 : gameData.playersDen).map((p, idx) => {
                                         const color = playerColors[idx % playerColors.length];
                                         return (
-                                            <div key={p.id} className={`flex-1 flex flex-col p-4 rounded-[2.5rem] border relative overflow-hidden transition-all ${color.card}`}>
+                                            <div key={p.id} className={`flex-1 min-h-[140px] flex flex-col p-4 rounded-[2.5rem] border relative overflow-hidden transition-all ${color.card}`}>
                                                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.bar}`}></div>
                                                 <div className="flex flex-col h-full justify-between items-center py-2">
-                                                    <input type="text" value={p.name} onChange={(e) => editName(gameMode, p.id, e.target.value)} className="text-center bg-transparent text-2xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-2" />
+                                                    <input type="text" value={p.name} onChange={(e) => editName(gameData.gameMode, p.id, e.target.value)} className="text-center bg-transparent text-2xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-2" />
                                                     <div className="flex-1 w-full flex items-center justify-between relative px-2">
-                                                        <button onClick={() => updateScore(gameMode, p.id, -1)} className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/60 text-red-500 shadow-sm border border-slate-200/30"><Icon name="minus" size={24} /></button>
-                                                        <span className="text-8xl font-black tabular-nums tracking-tighter">{p.score}</span>
+                                                        <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/60 text-red-500 shadow-sm border border-slate-200/30 active:scale-90"><Icon name="minus" size={24} /></button>
+                                                        <span className="text-7xl font-black tabular-nums tracking-tighter">{p.score}</span>
                                                         <div className="flex items-center gap-1">
-                                                            {gameMode === 'den' && playersDen.length > 2 && <button onClick={() => removePlayerDen(p.id)} className="p-2 text-slate-300"><Icon name="trash" size={16} /></button>}
-                                                            <button onClick={() => updateScore(gameMode, p.id, 1)} className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg ${color.btn}`}><Icon name="plus" size={24} /></button>
+                                                            {gameData.gameMode === 'den' && gameData.playersDen.length > 2 && <button onClick={() => removePlayerDen(p.id)} className="p-2 text-slate-300 active:text-red-500"><Icon name="trash" size={16} /></button>}
+                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg active:scale-90 ${color.btn}`}><Icon name="plus" size={24} /></button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -348,7 +367,7 @@
                         )}
 
                         {activeView === 'bill' && (
-                            <div className="flex-1 overflow-y-auto space-y-6 pb-10">
+                            <div className="flex-1 overflow-y-auto space-y-6 pb-10 pr-1">
                                 <section className={`rounded-[2.5rem] overflow-hidden ${glassPanel} border`}>
                                     <div className="p-8 space-y-6 border-b border-white/5">
                                         <div className="flex items-center gap-4 mb-2"><Icon name="calc" className="text-cyan-600" /> <h3 className="text-xl font-black uppercase">Settlement</h3></div>
@@ -357,42 +376,24 @@
                                                 <label className="text-[10px] font-black uppercase opacity-40 mb-1 block">Hourly Fee (x1,000 VND)</label>
                                                 <div className="relative">
                                                     <span className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 text-cyan-600 font-black">k</span>
-                                                    <input type="number" value={tableBill / 1000 || ''} onChange={(e) => setTableBill((parseInt(e.target.value) || 0) * 1000)} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} placeholder="40" />
+                                                    <input type="number" value={gameData.tableBill / 1000 || ''} onChange={(e) => { const d = {...gameData, tableBill: (parseInt(e.target.value) || 0) * 1000}; setGameData(d); saveToCloud(d); }} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} placeholder="40" />
                                                     <span className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20 font-black text-[10px]">.000đ</span>
                                                 </div>
                                             </div>
-                                            {gameMode === 'den' ? (
+                                            {gameData.gameMode === 'den' ? (
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase opacity-40 mb-1 block">Value Per Point (x1,000 VND)</label>
                                                     <div className="relative">
                                                         <span className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 text-cyan-600 font-black">k</span>
-                                                        <input type="number" value={unitPrice / 1000 || ''} onChange={(e) => setUnitPrice((parseInt(e.target.value) || 0) * 1000)} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} />
+                                                        <input type="number" value={gameData.unitPrice / 1000 || ''} onChange={(e) => { const d = {...gameData, unitPrice: (parseInt(e.target.value) || 0) * 1000}; setGameData(d); saveToCloud(d); }} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} />
                                                     </div>
                                                 </div>
                                             ) : (
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase opacity-40 mb-1 block">Split Policy</label>
-                                                    <select value={splitMode} onChange={(e) => setSplitMode(e.target.value)} className={`w-full py-4 px-6 rounded-2xl font-black text-lg focus:outline-none appearance-none ${subPanel}`}><option value="73">70/30 (W:30/L:70)</option><option value="equal">50/50 (Fair Share)</option></select>
+                                                    <select value={gameData.splitMode} onChange={(e) => { const d = {...gameData, splitMode: e.target.value}; setGameData(d); saveToCloud(d); }} className={`w-full py-4 px-6 rounded-2xl font-black text-lg focus:outline-none appearance-none ${subPanel}`}><option value="73">70/30 (W:30/L:70)</option><option value="equal">50/50 (Fair Share)</option></select>
                                                 </div>
                                             )}
-                                            <div>
-                                                <label className="text-[10px] font-black uppercase opacity-40 mb-2 block">Individual Expenses (x1,000 VND)</label>
-                                                <div className="space-y-2">
-                                                    {(gameMode === '1vs1' ? players1vs1 : playersDen).map(p => (
-                                                        <div key={p.id} className={`flex items-center gap-4 p-3 rounded-xl ${subPanel}`}>
-                                                            <span className="text-[9px] font-black uppercase flex-1 opacity-50 truncate">{p.name}</span>
-                                                            <div className="relative w-28">
-                                                                <input type="number" value={p.personal / 1000 || ''} onChange={(e) => {
-                                                                    const val = (parseInt(e.target.value) || 0) * 1000;
-                                                                    if(gameMode === '1vs1') setPlayers1vs1(players1vs1.map(x => x.id === p.id ? {...x, personal: val} : x));
-                                                                    else setPlayersDen(playersDen.map(x => x.id === p.id ? {...x, personal: val} : x));
-                                                                }} className="w-full bg-transparent text-right pr-4 font-black text-cyan-600 focus:outline-none text-lg" placeholder="0" />
-                                                                <span className="absolute right-0 top-1/2 -translate-y-1/2 opacity-20 font-black text-[9px]">k</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
 
