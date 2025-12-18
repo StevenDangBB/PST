@@ -492,7 +492,7 @@
                                         ) : (
                                             <div className="flex items-center gap-4">
                                                 <span className={`text-xs font-black uppercase ${ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'text-green-500' : 'text-red-500'}`}>{ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'Balanced' : `Diff: ${gameData.playersDen.reduce((acc, p) => acc + p.score, 0)}`}</span>
-                                                <button onClick={addPlayerDen} className="w-10 h-10 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-lg"><Icon name="plusThick" size={20} /></button>
+                                                <button onClick={addPlayerDen} className="w-10 h-10 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-lg"><Icon name="plus" size={20} /></button>
                                             </div>
                                         )}
                                     </div>
