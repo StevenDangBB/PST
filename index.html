@@ -64,7 +64,6 @@
         };
 
         // --- Configuration ---
-        // Ưu tiên config từ localStorage (cho GitHub Pages), sau đó mới đến biến môi trường
         const getFirebaseConfig = () => {
             const localConfig = localStorage.getItem('pst_firebase_config');
             if (localConfig) return JSON.parse(localConfig);
@@ -270,7 +269,6 @@
 
             const handleSaveConfig = () => {
                 try {
-                    // Xử lý thông minh hơn: Tự tìm JSON object nếu người dùng copy thừa code JS
                     let cleanedInput = configInput.trim();
                     const firstBrace = cleanedInput.indexOf('{');
                     const lastBrace = cleanedInput.lastIndexOf('}');
@@ -278,18 +276,22 @@
                     if (firstBrace !== -1 && lastBrace !== -1) {
                         cleanedInput = cleanedInput.substring(firstBrace, lastBrace + 1);
                     }
+                    
+                    // Simple cleaning for JS objects
+                    if (!cleanedInput.includes('"')) {
+                         cleanedInput = cleanedInput
+                            .replace(/(\w+):/g, '"$1":') 
+                            .replace(/'/g, '"')
+                            .replace(/,\s*}/g, '}');
+                    }
 
                     const config = JSON.parse(cleanedInput);
-                    
-                    // Validate sơ bộ
-                    if (!config.apiKey || !config.authDomain) {
-                        throw new Error("Thiếu apiKey hoặc authDomain");
-                    }
+                    if (!config.apiKey || !config.authDomain) throw new Error();
 
                     localStorage.setItem('pst_firebase_config', JSON.stringify(config));
                     window.location.reload();
                 } catch (e) {
-                    alert("Cấu hình không hợp lệ. Hãy chắc chắn bạn copy đúng đoạn JSON trong dấu { ... }");
+                    alert("Cấu hình không hợp lệ. Vui lòng copy toàn bộ đoạn mã trong dấu { ... }");
                 }
             };
             
@@ -423,7 +425,7 @@
                                 <p className="text-xs mb-2 opacity-70">Paste your Firebase JSON config here to enable Sync:</p>
                                 <textarea 
                                     className={`w-full h-32 p-3 text-xs rounded-xl mb-4 font-mono ${subPanel} bg-transparent border focus:outline-none`} 
-                                    placeholder='{"apiKey": "AIza...", "authDomain": "...", ...}'
+                                    placeholder='{"apiKey": "...", "authDomain": "...", ...}'
                                     value={configInput}
                                     onChange={(e) => setConfigInput(e.target.value)}
                                 />
@@ -490,7 +492,7 @@
                                         ) : (
                                             <div className="flex items-center gap-4">
                                                 <span className={`text-xs font-black uppercase ${ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'text-green-500' : 'text-red-500'}`}>{ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'Balanced' : `Diff: ${gameData.playersDen.reduce((acc, p) => acc + p.score, 0)}`}</span>
-                                                <button onClick={addPlayerDen} className="w-10 h-10 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-lg"><Icon name="userPlus" size={20} /></button>
+                                                <button onClick={addPlayerDen} className="w-10 h-10 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-lg"><Icon name="plusThick" size={20} /></button>
                                             </div>
                                         )}
                                     </div>
