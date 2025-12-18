@@ -39,6 +39,8 @@
             85% { opacity: 1; transform: translateY(0); }
             100% { opacity: 0; transform: translateY(-10px); }
         }
+        .loading-spinner { border: 4px solid rgba(255, 255, 255, 0.1); border-left-color: #d946ef; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -146,7 +148,7 @@
             const [lastSessionBackup, setLastSessionBackup] = useState(null);
             const [syncing, setSyncing] = useState(false);
             const [showCopied, setShowCopied] = useState(false);
-            const [isInitialLoad, setIsInitialLoad] = useState(true);
+            const [isLoadingRoom, setIsLoadingRoom] = useState(true); // Trạng thái tải phòng
             const [ocrLoading, setOcrLoading] = useState(false);
 
             const [user, setUser] = useState(null);
@@ -154,9 +156,12 @@
 
             const [gameData, setGameData] = useState(DEFAULT_GAME_DATA);
 
-            // Effect: Initialize Firebase & Auth
+            // Effect 1: Initialize Firebase & Auth
             useEffect(() => {
-                if (!firebaseConfig || !window.FirebaseCore) return;
+                if (!firebaseConfig || !window.FirebaseCore) {
+                    setIsLoadingRoom(false); // Fallback local
+                    return;
+                }
                 const { initializeApp } = window.FirebaseCore;
                 const { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } = window.FirebaseAuth;
 
@@ -170,13 +175,16 @@
                         } else {
                             await signInAnonymously(auth);
                         }
-                    } catch (e) { console.error("Auth error:", e); }
+                    } catch (e) { console.error("Auth error:", e); setIsLoadingRoom(false); }
                 };
 
                 initAuth();
                 const unsubscribe = onAuthStateChanged(auth, setUser);
 
-                const handleHash = () => setSessionId(getSessionId());
+                const handleHash = () => {
+                    setSessionId(getSessionId());
+                    setIsLoadingRoom(true); // Reset loading state on room change
+                };
                 window.addEventListener('hashchange', handleHash);
 
                 return () => {
@@ -185,7 +193,7 @@
                 };
             }, []);
 
-            // Effect: Listen to Room Data
+            // Effect 2: Listen to Room Data
             useEffect(() => {
                 if (!user || !window.FirebaseStore) return;
                 const { getFirestore, doc, onSnapshot, setDoc } = window.FirebaseStore;
@@ -196,25 +204,26 @@
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        if (JSON.stringify(data) !== JSON.stringify(gameData)) {
-                            setGameData(data);
-                        }
-                        setIsInitialLoad(false);
+                        setGameData(data); // Cập nhật state từ cloud
                     } else {
-                        // New Room Detected: Reset to Defaults immediately
+                        // Phòng mới: Reset về mặc định
                         const resetData = JSON.parse(JSON.stringify(DEFAULT_GAME_DATA));
                         setGameData(resetData);
                         setDoc(docRef, resetData);
-                        setIsInitialLoad(false);
                     }
                     setSyncing(false);
-                }, (err) => { console.error("Firestore error:", err); setSyncing(false); });
+                    setIsLoadingRoom(false); // Dữ liệu đã sẵn sàng
+                }, (err) => { 
+                    console.error("Firestore error:", err); 
+                    setSyncing(false); 
+                    setIsLoadingRoom(false); 
+                });
 
                 return () => unsubscribe();
             }, [user, sessionId]);
 
             const saveToCloud = async (newData) => {
-                if (!user || !window.FirebaseStore || isInitialLoad) return;
+                if (!user || !window.FirebaseStore || isLoadingRoom) return; // Chặn lưu khi chưa load xong
                 setSyncing(true);
                 try {
                     const { getFirestore, doc, setDoc } = window.FirebaseStore;
@@ -225,7 +234,7 @@
             };
 
             const handleUpdate = (newData) => {
-                if (isInitialLoad) return;
+                if (isLoadingRoom) return; // Chặn thao tác khi đang load
                 setGameData(newData);
                 saveToCloud(newData);
             };
@@ -354,6 +363,17 @@
                 const newId = generateRoomId();
                 window.location.hash = newId;
             };
+
+            if (isLoadingRoom) {
+                return (
+                    <div className={`h-screen flex items-center justify-center ${themeClasses}`}>
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="loading-spinner border-fuchsia-500"></div>
+                            <p className="text-sm font-bold tracking-widest uppercase opacity-60">Đang vào phòng...</p>
+                        </div>
+                    </div>
+                );
+            }
 
             return (
                 <div className={`h-screen flex flex-col transition-colors duration-500 ${themeClasses} overflow-hidden`}>
