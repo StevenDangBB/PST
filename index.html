@@ -24,7 +24,7 @@
     <!-- Thư viện hiệu ứng pháo giấy -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
         .glass-effect { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
@@ -42,6 +42,19 @@
         }
         .loading-spinner { border: 3px solid rgba(255, 255, 255, 0.1); border-left-color: #d946ef; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Hiệu ứng Neon Pulse cho Race To - Tương phản mạnh */
+        @keyframes neon-pulse {
+            0%, 100% { 
+                text-shadow: 0 0 15px rgba(217, 70, 239, 0.6), 0 0 30px rgba(217, 70, 239, 0.4); 
+                transform: scale(1); 
+            }
+            50% { 
+                text-shadow: 0 0 30px rgba(217, 70, 239, 1), 0 0 50px rgba(217, 70, 239, 0.8), 0 0 70px rgba(217, 70, 239, 0.5); 
+                transform: scale(1.1); 
+            }
+        }
+        .race-to-effect { animation: neon-pulse 2s infinite ease-in-out; }
     </style>
 </head>
 <body>
@@ -113,6 +126,8 @@
                     </>
                 ),
                 minus: <path d="M5 12h14" strokeWidth="3" strokeLinecap="round" />,
+                chevronUp: <path d="M18 15l-6-6-6 6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />,
+                chevronDown: <path d="M6 9l6 6 6-6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />,
                 user: (<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>),
                 users: (<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
                 userPlus: (
@@ -144,6 +159,22 @@
             );
         };
 
+        const PlayerWatermark = ({ name }) => {
+            // Repeat name to create a pattern
+            const pattern = Array(25).fill(name || "PLAYER").join("   •   ");
+            return (
+                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
+                    <div className="absolute inset-[-50%] w-[200%] h-[200%] flex flex-wrap content-center justify-center -rotate-45 transform origin-center">
+                         {Array(15).fill(0).map((_, i) => (
+                             <div key={i} className="w-full text-center text-4xl sm:text-6xl font-black uppercase whitespace-nowrap text-slate-900/10 dark:text-white/5 leading-tight">
+                                {pattern}
+                             </div>
+                         ))}
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
             // --- UI CONSTANTS ---
             const [theme, setTheme] = useState('light');
@@ -152,14 +183,14 @@
             const subPanel = theme === 'dark' ? 'bg-black/40 border-white/5' : 'bg-white border border-slate-200';
 
             const playerColors = [
-                { card: theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50', bar: 'bg-blue-500', btn: 'bg-blue-600', text: 'text-blue-600' },
-                { card: theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50', bar: 'bg-red-500', btn: 'bg-red-600', text: 'text-red-600' },
-                { card: theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50', bar: 'bg-emerald-500', btn: 'bg-emerald-600', text: 'text-emerald-600' },
-                { card: theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50', bar: 'bg-amber-500', btn: 'bg-amber-600', text: 'text-amber-600' },
-                { card: theme === 'dark' ? 'bg-fuchsia-900/20' : 'bg-fuchsia-50', bar: 'bg-fuchsia-500', btn: 'bg-fuchsia-600', text: 'text-fuchsia-600' },
-                { card: theme === 'dark' ? 'bg-indigo-900/20' : 'bg-indigo-50', bar: 'bg-indigo-500', btn: 'bg-indigo-600', text: 'text-indigo-600' },
-                { card: theme === 'dark' ? 'bg-orange-900/20' : 'bg-orange-50', bar: 'bg-orange-500', btn: 'bg-orange-600', text: 'text-orange-600' },
-                { card: theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50', bar: 'bg-teal-500', btn: 'bg-teal-600', text: 'text-teal-600' },
+                { card: theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50', bar: 'bg-blue-500', btn: 'hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600', text: 'text-blue-600' },
+                { card: theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50', bar: 'bg-red-500', btn: 'hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600', text: 'text-red-600' },
+                { card: theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50', bar: 'bg-emerald-500', btn: 'hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-600', text: 'text-emerald-600' },
+                { card: theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50', bar: 'bg-amber-500', btn: 'hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-600', text: 'text-amber-600' },
+                { card: theme === 'dark' ? 'bg-fuchsia-900/20' : 'bg-fuchsia-50', bar: 'bg-fuchsia-500', btn: 'hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/40 text-fuchsia-600', text: 'text-fuchsia-600' },
+                { card: theme === 'dark' ? 'bg-indigo-900/20' : 'bg-indigo-50', bar: 'bg-indigo-500', btn: 'hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-600', text: 'text-indigo-600' },
+                { card: theme === 'dark' ? 'bg-orange-900/20' : 'bg-orange-50', bar: 'bg-orange-500', btn: 'hover:bg-orange-100 dark:hover:bg-orange-900/40 text-orange-600', text: 'text-orange-600' },
+                { card: theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50', bar: 'bg-teal-500', btn: 'hover:bg-teal-100 dark:hover:bg-teal-900/40 text-teal-600', text: 'text-teal-600' },
             ];
 
             const [activeView, setActiveView] = useState('score');
@@ -194,7 +225,6 @@
                     const auth = window.FirebaseAuth.getAuth();
                     const initAuth = async () => {
                         try {
-                            // Fix: Try custom token if available, BUT fallback to anonymous on error
                             if (window.__initial_auth_token) {
                                 try {
                                     await window.FirebaseAuth.signInWithCustomToken(auth, window.__initial_auth_token);
@@ -500,7 +530,7 @@
                                                 <span className="text-[10px] font-black uppercase opacity-40">Race To</span>
                                                 <div className="flex items-center gap-10">
                                                     <button onClick={() => handleUpdate({...gameData, raceTo: Math.max(1, gameData.raceTo - 1)})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="minus" size={18} /></button>
-                                                    <span className="text-6xl font-black text-fuchsia-500 drop-shadow-md">{gameData.raceTo}</span>
+                                                    <span className="text-6xl font-black text-slate-800 dark:text-white drop-shadow-md race-to-effect">{gameData.raceTo}</span>
                                                     <button onClick={() => handleUpdate({...gameData, raceTo: gameData.raceTo + 1})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="plus" size={18} /></button>
                                                 </div>
                                             </div>
@@ -518,35 +548,51 @@
                                         const color = playerColors[idx % playerColors.length];
                                         return (
                                             <div key={p.id} className={`relative flex flex-col p-4 rounded-[2.5rem] border overflow-hidden transition-all ${color.card} ${gameData.gameMode === '1vs1' ? 'h-full justify-center' : 'flex-1 min-h-[140px] justify-between'}`}>
+                                                <PlayerWatermark name={p.name} />
                                                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.bar}`}></div>
-                                                <div className="flex flex-col h-full items-center py-2 w-full">
+                                                <div className="flex flex-col h-full items-center py-2 w-full z-10">
                                                     
                                                     {/* Name Input */}
-                                                    <input type="text" value={p.name} onChange={(e) => editName(gameData.gameMode, p.id, e.target.value)} className="text-center bg-transparent text-sm sm:text-xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-1 mb-1 sm:mb-2 truncate" />
+                                                    <input type="text" value={p.name} onChange={(e) => editName(gameData.gameMode, p.id, e.target.value)} className="text-center bg-transparent text-xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-2 mb-2 truncate relative z-20" />
                                                     
                                                     {/* Controls Container */}
-                                                    <div className={`flex-1 w-full flex items-center relative px-1 gap-2 ${gameData.gameMode === '1vs1' ? 'flex-row justify-between' : 'flex-row justify-between'}`}>
-                                                        
-                                                        {/* Minus Button - Tinh tế hơn */}
-                                                        <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`rounded-full flex items-center justify-center bg-white/40 dark:bg-black/20 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 active:scale-90 transition-all backdrop-blur-sm ${gameData.gameMode === '1vs1' ? 'w-12 h-12' : 'w-10 h-10'}`}>
-                                                            <Icon name="minus" size={20} />
-                                                        </button>
-                                                        
-                                                        {/* Score */}
-                                                        <span className={`font-black tabular-nums tracking-tighter text-center flex-1 ${color.text} ${gameData.gameMode === '1vs1' ? 'text-6xl sm:text-8xl' : 'text-5xl sm:text-7xl'}`}>
-                                                            {p.score}
-                                                        </span>
-                                                        
-                                                        {/* Right Side Actions */}
-                                                        <div className="flex items-center gap-2">
-                                                            {gameData.gameMode === 'den' && gameData.playersDen.length > 2 && <button onClick={() => removePlayerDen(p.id)} className="p-2 text-slate-300 active:text-red-500"><Icon name="trash" size={16} /></button>}
+                                                    {gameData.gameMode === '1vs1' ? (
+                                                        <div className="flex-1 w-full flex flex-col items-center justify-center gap-2">
                                                             
-                                                            {/* Plus Button - Tinh tế hơn */}
-                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`rounded-full flex items-center justify-center bg-white/40 dark:bg-black/20 text-slate-500 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 active:scale-90 transition-all backdrop-blur-sm ${gameData.gameMode === '1vs1' ? 'w-12 h-12' : 'w-10 h-10'}`}>
-                                                                <Icon name="plus" size={20} />
+                                                            {/* Up/Plus Button (Top) */}
+                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
+                                                                <Icon name="chevronUp" size={40} />
+                                                            </button>
+                                                            
+                                                            {/* Score (Middle) */}
+                                                            <span className={`font-black tabular-nums tracking-tighter text-center py-2 ${color.text} text-7xl sm:text-8xl`}>
+                                                                {p.score}
+                                                            </span>
+                                                            
+                                                            {/* Down/Minus Button (Bottom) */}
+                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
+                                                                <Icon name="chevronDown" size={40} />
                                                             </button>
                                                         </div>
-                                                    </div>
+                                                    ) : (
+                                                        <div className="flex-1 w-full flex items-center relative px-1 gap-2 flex-row justify-between">
+                                                            {/* Team Match Layout (Original) */}
+                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`rounded-full flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-90 transition-all w-12 h-12`}>
+                                                                <Icon name="minus" size={24} />
+                                                            </button>
+                                                            
+                                                            <span className={`font-black tabular-nums tracking-tighter text-center flex-1 ${color.text} text-5xl sm:text-7xl`}>
+                                                                {p.score}
+                                                            </span>
+                                                            
+                                                            <div className="flex items-center gap-2">
+                                                                {gameData.gameMode === 'den' && gameData.playersDen.length > 2 && <button onClick={() => removePlayerDen(p.id)} className="p-2 text-slate-300 active:text-red-500"><Icon name="trash" size={16} /></button>}
+                                                                <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`rounded-full flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-90 transition-all w-12 h-12`}>
+                                                                    <Icon name="plus" size={24} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
