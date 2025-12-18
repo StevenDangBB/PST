@@ -75,6 +75,24 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'pst-tool-v2';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
+        // --- Default Game Data ---
+        const DEFAULT_GAME_DATA = {
+            gameMode: '1vs1',
+            raceTo: 7,
+            unitPrice: 10000,
+            tableBill: 0,
+            splitMode: '73',
+            players1vs1: [
+                { id: 1, name: 'PLAYER 01', score: 0, personal: 0 },
+                { id: 2, name: 'PLAYER 02', score: 0, personal: 0 },
+            ],
+            playersDen: [
+                { id: 1, name: 'PLAYER A', score: 0, personal: 0 },
+                { id: 2, name: 'PLAYER B', score: 0, personal: 0 },
+                { id: 3, name: 'PLAYER C', score: 0, personal: 0 },
+            ]
+        };
+
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 plus: <path d="M12 5v14M5 12h14" />,
@@ -134,22 +152,7 @@
             const [user, setUser] = useState(null);
             const [sessionId, setSessionId] = useState(getSessionId());
 
-            const [gameData, setGameData] = useState({
-                gameMode: '1vs1',
-                raceTo: 7,
-                unitPrice: 10000,
-                tableBill: 0,
-                splitMode: '73',
-                players1vs1: [
-                    { id: 1, name: 'PLAYER 01', score: 0, personal: 0 },
-                    { id: 2, name: 'PLAYER 02', score: 0, personal: 0 },
-                ],
-                playersDen: [
-                    { id: 1, name: 'PLAYER A', score: 0, personal: 0 },
-                    { id: 2, name: 'PLAYER B', score: 0, personal: 0 },
-                    { id: 3, name: 'PLAYER C', score: 0, personal: 0 },
-                ]
-            });
+            const [gameData, setGameData] = useState(DEFAULT_GAME_DATA);
 
             // Effect: Initialize Firebase & Auth
             useEffect(() => {
@@ -167,7 +170,7 @@
                         } else {
                             await signInAnonymously(auth);
                         }
-                    } catch (e) { console.error("Lỗi đăng nhập:", e); }
+                    } catch (e) { console.error("Auth error:", e); }
                 };
 
                 initAuth();
@@ -198,11 +201,14 @@
                         }
                         setIsInitialLoad(false);
                     } else {
-                        setDoc(docRef, gameData);
+                        // New Room Detected: Reset to Defaults immediately
+                        const resetData = JSON.parse(JSON.stringify(DEFAULT_GAME_DATA));
+                        setGameData(resetData);
+                        setDoc(docRef, resetData);
                         setIsInitialLoad(false);
                     }
                     setSyncing(false);
-                }, (err) => { console.error("Lỗi Firestore:", err); setSyncing(false); });
+                }, (err) => { console.error("Firestore error:", err); setSyncing(false); });
 
                 return () => unsubscribe();
             }, [user, sessionId]);
@@ -215,7 +221,7 @@
                     const db = getFirestore();
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
                     await setDoc(docRef, newData);
-                } catch (e) { console.error("Lưu thất bại:", e); } finally { setSyncing(false); }
+                } catch (e) { console.error("Save failed:", e); } finally { setSyncing(false); }
             };
 
             const handleUpdate = (newData) => {
@@ -295,12 +301,7 @@
 
             const resetAllData = () => {
                 setLastSessionBackup(gameData);
-                const newData = {
-                    ...gameData,
-                    tableBill: 0,
-                    players1vs1: [{ id: 1, name: 'PLAYER 01', score: 0, personal: 0 }, { id: 2, name: 'PLAYER 02', score: 0, personal: 0 }],
-                    playersDen: [{ id: 1, name: 'PLAYER A', score: 0, personal: 0 }, { id: 2, name: 'PLAYER B', score: 0, personal: 0 }, { id: 3, name: 'PLAYER C', score: 0, personal: 0 }]
-                };
+                const newData = JSON.parse(JSON.stringify(DEFAULT_GAME_DATA));
                 setWinner(null);
                 handleUpdate(newData);
             };
@@ -349,11 +350,9 @@
                 document.body.removeChild(t);
             };
 
-            // NEW: Function to create a new random room
             const createNewRoom = () => {
                 const newId = generateRoomId();
                 window.location.hash = newId;
-                // session update is handled by hashchange listener
             };
 
             return (
@@ -373,7 +372,7 @@
                             </div>
                             <div className="hidden sm:block">
                                 <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent uppercase">PST LIVE</h1>
-                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400">
+                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400 flex items-center gap-1">
                                     BÀN: <span className="text-fuchsia-500">{sessionId}</span>
                                 </span>
                             </div>
@@ -511,9 +510,9 @@
                                                 <div key={p.id} className={`p-5 rounded-[1.5rem] flex flex-col gap-3 border ${theme === 'dark' ? 'bg-white/[0.02]' : 'bg-white/80 shadow-sm'} text-left`}>
                                                     <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase opacity-40">{p.name}</span><span className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{p.total.toLocaleString()}đ</span></div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        <div className="px-2 py-1 bg-slate-200/50 rounded-lg text-[8px] font-bold">Tiền giờ: {Math.round(p.tableShare).toLocaleString()}</div>
-                                                        {p.personal > 0 && <div className="px-2 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[8px] font-bold uppercase">Riêng: {p.personal.toLocaleString()}</div>}
-                                                        {p.gameExchange !== undefined && p.gameExchange !== 0 && <div className={`px-2 py-1 rounded-lg text-[8px] font-bold ${p.gameExchange > 0 ? 'bg-red-500/10 text-red-500' : 'bg-fuchsia-500/10 text-fuchsia-600'}`}>{p.gameExchange > 0 ? `Đền: +${p.gameExchange.toLocaleString()}` : `Thắng: ${p.gameExchange.toLocaleString()}`}</div>}
+                                                        <div className="px-2 py-1 bg-slate-200/50 rounded-lg text-[8px] font-bold uppercase tracking-wider">Tiền giờ: {Math.round(p.tableShare).toLocaleString()}</div>
+                                                        {p.personal > 0 && <div className="px-2 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[8px] font-bold uppercase tracking-wider">Riêng: {p.personal.toLocaleString()}</div>}
+                                                        {p.gameExchange !== undefined && p.gameExchange !== 0 && <div className={`px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-wider ${p.gameExchange > 0 ? 'bg-red-500/10 text-red-500' : 'bg-fuchsia-500/10 text-fuchsia-600'}`}>{p.gameExchange > 0 ? `Đền: +${p.gameExchange.toLocaleString()}` : `Thắng: ${p.gameExchange.toLocaleString()}`}</div>}
                                                     </div>
                                                 </div>
                                             );
