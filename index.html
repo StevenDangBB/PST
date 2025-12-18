@@ -64,15 +64,13 @@
         };
 
         // --- CONFIGURATION ZONE ---
-        // BƯỚC QUAN TRỌNG: Dán config Firebase của bạn thay cho giá trị null ở dưới để mọi người dùng chung
-        // Ví dụ: const EMBEDDED_FIREBASE_CONFIG = { apiKey: "AIza...", ... };
-        const EMBEDDED_FIREBASE_CONFIG = const firebaseConfig = {
-          apiKey: "AIzaSyD2F3eHYFkTpzVQQ0IvLmh8-8ieJKR4XQ4",
-          authDomain: "pst-tool.firebaseapp.com",
-          projectId: "pst-tool",
-          storageBucket: "pst-tool.firebasestorage.app",
-          messagingSenderId: "660912727646",
-          appId: "1:660912727646:web:4817123c8df674aa57f6cf"
+        const EMBEDDED_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyD2F3eHYFkTpzVQQ0IvLmh8-8ieJKR4XQ4",
+            authDomain: "pst-tool.firebaseapp.com",
+            projectId: "pst-tool",
+            storageBucket: "pst-tool.firebasestorage.app",
+            messagingSenderId: "660912727646",
+            appId: "1:660912727646:web:4817123c8df674aa57f6cf"
         };
 
         const getFirebaseConfig = () => {
@@ -196,8 +194,14 @@
                     const auth = window.FirebaseAuth.getAuth();
                     const initAuth = async () => {
                         try {
+                            // Fix: Try custom token if available, BUT fallback to anonymous on error (e.g. project mismatch)
                             if (window.__initial_auth_token) {
-                                await window.FirebaseAuth.signInWithCustomToken(auth, window.__initial_auth_token);
+                                try {
+                                    await window.FirebaseAuth.signInWithCustomToken(auth, window.__initial_auth_token);
+                                } catch (tokenError) {
+                                    console.warn("Custom token failed, falling back to anonymous:", tokenError);
+                                    await window.FirebaseAuth.signInAnonymously(auth);
+                                }
                             } else {
                                 await window.FirebaseAuth.signInAnonymously(auth);
                             }
