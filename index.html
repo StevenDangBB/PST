@@ -43,7 +43,7 @@
         .loading-spinner { border: 3px solid rgba(255, 255, 255, 0.1); border-left-color: #d946ef; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Hiệu ứng Neon Pulse cho Race To - Tương phản mạnh */
+        /* Hiệu ứng Neon Pulse cho Race To */
         @keyframes neon-pulse {
             0%, 100% { 
                 text-shadow: 0 0 15px rgba(217, 70, 239, 0.6), 0 0 30px rgba(217, 70, 239, 0.4); 
@@ -76,6 +76,8 @@
             return hash;
         };
 
+        const getCurrentTime = () => new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
         // --- CONFIGURATION ZONE ---
         const EMBEDDED_FIREBASE_CONFIG = {
             apiKey: "AIzaSyD2F3eHYFkTpzVQQ0IvLmh8-8ieJKR4XQ4",
@@ -87,7 +89,7 @@
         };
 
         const getFirebaseConfig = () => {
-            if (EMBEDDED_FIREBASE_CONFIG) return EMBEDDED_FIREBASE_CONFIG; // Ưu tiên config nhúng sẵn
+            if (EMBEDDED_FIREBASE_CONFIG) return EMBEDDED_FIREBASE_CONFIG;
             const localConfig = localStorage.getItem('pst_firebase_config');
             if (localConfig) return JSON.parse(localConfig);
             if (typeof window.__firebase_config !== 'undefined' && window.__firebase_config) {
@@ -105,6 +107,7 @@
             unitPrice: 10000,
             tableBill: 0,
             splitMode: '73',
+            history: [],
             players1vs1: [
                 { id: 1, name: 'PLAYER 01', score: 0, personal: 0, colorIdx: 0 },
                 { id: 2, name: 'PLAYER 02', score: 0, personal: 0, colorIdx: 1 },
@@ -142,6 +145,7 @@
                     </>
                 ),
                 refresh: (<><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></>),
+                history: (<><path d="M3 3v5h5" /><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" /><path d="M12 7v5l4 2" /></>),
                 trophy: (<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>),
                 calc: (<><rect width="16" height="20" x="4" y="2" rx="2" /><line x1="8" x2="16" y1="6" y2="6" /><line x1="16" x2="16" y1="14" y2="18" /><path d="M16 10h.01" /><path d="M12 10h.01" /><path d="M8 10h.01" /><path d="M12 14h.01" /><path d="M8 14h.01" /><path d="M12 18h.01" /><path d="M8 18h.01" /></>),
                 sun: (<><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="M4.93 4.93l1.41 1.41" /><path d="M17.66 17.66l1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="M6.34 17.66l-1.41 1.41" /><path d="M19.07 4.93l-1.41 1.41" /></>),
@@ -165,13 +169,13 @@
             );
         };
 
-        const PlayerWatermark = ({ name }) => {
+        const PlayerWatermark = ({ name, colorClass }) => {
             const pattern = Array(25).fill(name || "PLAYER").join("   •   ");
             return (
                 <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
                     <div className="absolute inset-[-50%] w-[200%] h-[200%] flex flex-wrap content-center justify-center -rotate-45 transform origin-center">
                          {Array(15).fill(0).map((_, i) => (
-                             <div key={i} className="w-full text-center text-4xl sm:text-6xl font-black uppercase whitespace-nowrap text-slate-900/10 dark:text-white/5 leading-tight">
+                             <div key={i} className={`w-full text-center text-4xl sm:text-6xl font-black uppercase whitespace-nowrap leading-tight ${colorClass}`}>
                                 {pattern}
                              </div>
                          ))}
@@ -180,7 +184,6 @@
             );
         };
 
-        // --- TeamPlayerCard: Removed Drag & Drop, Added Manage Mode Logic ---
         const TeamPlayerCard = ({ player, index, updateScore, editName, autoBalance, removePlayerDen, color, isManageMode, movePlayer, gameData }) => {
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
             const [showBalanceConfirm, setShowBalanceConfirm] = useState(false);
@@ -217,7 +220,7 @@
                                 </div>
                                 <h3 className="text-xl font-black mb-2 dark:text-white">Auto Balance?</h3>
                                 <p className="text-sm text-slate-500 mb-6">
-                                    Adjust <strong>{player.name}</strong> from <strong className="text-slate-800 dark:text-slate-200">{player.score}</strong> to <strong className="text-blue-600">{newScore}</strong> to fix the discrepancy of <strong>{currentTotal}</strong>?
+                                    Adjust <strong>{player.name}</strong> from <strong className="text-slate-800 dark:text-slate-200">{player.score}</strong> to <strong className="text-blue-600">{newScore}</strong>?
                                 </p>
                                 <div className="flex gap-3">
                                     <button onClick={() => setShowBalanceConfirm(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancel</button>
@@ -228,9 +231,19 @@
                     )}
 
                     <div className={`relative flex-1 min-h-[120px] flex flex-col p-4 rounded-[2.5rem] border overflow-hidden transition-all ${color.card}`}>
-                        <PlayerWatermark name={player.name} />
+                        <PlayerWatermark name={player.name} colorClass={color.watermark} />
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.bar}`}></div>
                         
+                        {/* Delete Button (Moved to Top Left for Safety) */}
+                        {!isManageMode && (
+                            <button 
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="absolute top-3 left-3 p-2 bg-white/20 hover:bg-red-500 hover:text-white text-slate-400 rounded-full transition-all z-20 backdrop-blur-sm"
+                            >
+                                <Icon name="x" size={12} />
+                            </button>
+                        )}
+
                         <div className="relative z-10 flex items-center h-full w-full gap-2 mt-0">
                             
                             {/* LEFT SIDE: Minus OR Move Down */}
@@ -257,7 +270,7 @@
                                 <button 
                                     onClick={() => {
                                         if (!isManageMode) {
-                                            if (currentTotal === 0) return; // Already balanced
+                                            if (currentTotal === 0) return; 
                                             setShowBalanceConfirm(true);
                                         }
                                     }}
@@ -297,14 +310,14 @@
             const subPanel = theme === 'dark' ? 'bg-black/40 border-white/5' : 'bg-white border border-slate-200';
 
             const playerColors = [
-                { card: theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50', bar: 'bg-blue-500', btn: 'hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600', text: 'text-blue-600' },
-                { card: theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50', bar: 'bg-red-500', btn: 'hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600', text: 'text-red-600' },
-                { card: theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50', bar: 'bg-emerald-500', btn: 'hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-600', text: 'text-emerald-600' },
-                { card: theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50', bar: 'bg-amber-500', btn: 'hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-600', text: 'text-amber-600' },
-                { card: theme === 'dark' ? 'bg-fuchsia-900/20' : 'bg-fuchsia-50', bar: 'bg-fuchsia-500', btn: 'hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/40 text-fuchsia-600', text: 'text-fuchsia-600' },
-                { card: theme === 'dark' ? 'bg-indigo-900/20' : 'bg-indigo-50', bar: 'bg-indigo-500', btn: 'hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-600', text: 'text-indigo-600' },
-                { card: theme === 'dark' ? 'bg-orange-900/20' : 'bg-orange-50', bar: 'bg-orange-500', btn: 'hover:bg-orange-100 dark:hover:bg-orange-900/40 text-orange-600', text: 'text-orange-600' },
-                { card: theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50', bar: 'bg-teal-500', btn: 'hover:bg-teal-100 dark:hover:bg-teal-900/40 text-teal-600', text: 'text-teal-600' },
+                { card: theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50', bar: 'bg-blue-500', btn: 'hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600', text: 'text-blue-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-blue-500/10' },
+                { card: theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50', bar: 'bg-red-500', btn: 'hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600', text: 'text-red-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-red-500/10' },
+                { card: theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50', bar: 'bg-emerald-500', btn: 'hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-600', text: 'text-emerald-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-emerald-500/10' },
+                { card: theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50', bar: 'bg-amber-500', btn: 'hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-600', text: 'text-amber-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-amber-500/10' },
+                { card: theme === 'dark' ? 'bg-fuchsia-900/20' : 'bg-fuchsia-50', bar: 'bg-fuchsia-500', btn: 'hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/40 text-fuchsia-600', text: 'text-fuchsia-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-fuchsia-500/10' },
+                { card: theme === 'dark' ? 'bg-indigo-900/20' : 'bg-indigo-50', bar: 'bg-indigo-500', btn: 'hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-600', text: 'text-indigo-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-indigo-500/10' },
+                { card: theme === 'dark' ? 'bg-orange-900/20' : 'bg-orange-50', bar: 'bg-orange-500', btn: 'hover:bg-orange-100 dark:hover:bg-orange-900/40 text-orange-600', text: 'text-orange-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-orange-500/10' },
+                { card: theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50', bar: 'bg-teal-500', btn: 'hover:bg-teal-100 dark:hover:bg-teal-900/40 text-teal-600', text: 'text-teal-600', watermark: theme === 'dark' ? 'text-white/5' : 'text-teal-500/10' },
             ];
 
             const [activeView, setActiveView] = useState('score');
@@ -319,6 +332,7 @@
             const [permissionError, setPermissionError] = useState(false);
             const [isFocusMode, setIsFocusMode] = useState(false);
             const [isManageMode, setIsManageMode] = useState(false);
+            const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
             const [user, setUser] = useState(null);
             const [sessionId, setSessionId] = useState(getSessionId());
@@ -449,13 +463,31 @@
                 }
             };
             
+            // --- Helper to log history ---
+            const addHistory = (prevData, msg) => {
+                const newEntry = {
+                    id: Date.now(),
+                    time: getCurrentTime(),
+                    text: msg
+                };
+                return [newEntry, ...(prevData.history || [])].slice(0, 50); // Limit to 50 items
+            };
+
             const updateScore = (mode, id, delta) => {
                 if (winner) return;
                 const newData = { ...gameData };
+                
+                let playerName = "";
+                let oldScore = 0;
+                let newScore = 0;
+
                 if (mode === '1vs1') {
                     newData.players1vs1 = gameData.players1vs1.map(p => {
                         if (p.id === id) {
-                            const newScore = Math.max(0, p.score + delta);
+                            playerName = p.name;
+                            oldScore = p.score;
+                            newScore = Math.max(0, p.score + delta);
+                            
                             if (newScore === gameData.raceTo && gameData.raceTo > 0) {
                                 setWinner(p.name);
                                 if(window.confetti) window.confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
@@ -465,35 +497,63 @@
                         return p;
                     });
                 } else {
-                    newData.playersDen = gameData.playersDen.map(p => p.id === id ? { ...p, score: p.score + delta } : p);
+                    newData.playersDen = gameData.playersDen.map(p => {
+                        if (p.id === id) {
+                            playerName = p.name;
+                            oldScore = p.score;
+                            newScore = p.score + delta;
+                            return { ...p, score: newScore };
+                        }
+                        return p;
+                    });
                 }
+                
+                const changeStr = delta > 0 ? `+${delta}` : `${delta}`;
+                newData.history = addHistory(newData, `${playerName}: ${changeStr} (${oldScore} → ${newScore})`);
+                
                 handleUpdate(newData);
             };
 
             const editName = (mode, id, newName) => {
                 const newData = { ...gameData };
-                if (mode === '1vs1') newData.players1vs1 = gameData.players1vs1.map(p => p.id === id ? { ...p, name: newName } : p);
-                else newData.playersDen = gameData.playersDen.map(p => p.id === id ? { ...p, name: newName } : p);
+                let oldName = "";
+                if (mode === '1vs1') {
+                    newData.players1vs1 = gameData.players1vs1.map(p => {
+                        if(p.id === id) { oldName = p.name; return { ...p, name: newName }; }
+                        return p;
+                    });
+                } else {
+                    newData.playersDen = gameData.playersDen.map(p => {
+                        if(p.id === id) { oldName = p.name; return { ...p, name: newName }; }
+                        return p;
+                    });
+                }
                 handleUpdate(newData);
             };
 
             const addPlayerDen = () => {
                 const newData = { ...gameData };
                 const nextColorIdx = newData.playersDen.length % 8; 
+                const newName = `PLAYER ${String.fromCharCode(65 + gameData.playersDen.length)}`;
                 newData.playersDen = [...gameData.playersDen, { 
                     id: Date.now(), 
-                    name: `PLAYER ${String.fromCharCode(65 + gameData.playersDen.length)}`, 
+                    name: newName, 
                     score: 0, 
                     personal: 0,
                     colorIdx: nextColorIdx 
                 }];
+                newData.history = addHistory(newData, `Thêm người chơi: ${newName}`);
                 handleUpdate(newData);
             };
 
             const removePlayerDen = (id) => {
                 if (gameData.playersDen.length <= 2) return;
                 const newData = { ...gameData };
+                const playerToRemove = newData.playersDen.find(p => p.id === id);
                 newData.playersDen = gameData.playersDen.filter(p => p.id !== id);
+                if (playerToRemove) {
+                    newData.history = addHistory(newData, `Xóa người chơi: ${playerToRemove.name}`);
+                }
                 handleUpdate(newData);
             };
 
@@ -503,12 +563,20 @@
                     .reduce((acc, p) => acc + p.score, 0);
                 
                 const newData = { ...gameData };
+                let playerName = "";
+                let oldScore = 0;
+                let newScore = -currentSumExcludingTarget;
+
                 newData.playersDen = gameData.playersDen.map(p => {
                     if (p.id === targetId) {
-                        return { ...p, score: -currentSumExcludingTarget };
+                        playerName = p.name;
+                        oldScore = p.score;
+                        return { ...p, score: newScore };
                     }
                     return p;
                 });
+                
+                newData.history = addHistory(newData, `Cân bằng điểm: ${playerName} (${oldScore} → ${newScore})`);
                 handleUpdate(newData);
             };
 
@@ -529,6 +597,7 @@
             const resetAllData = () => {
                 setLastSessionBackup(gameData);
                 const newData = JSON.parse(JSON.stringify(DEFAULT_GAME_DATA));
+                newData.history = [{id: Date.now(), time: getCurrentTime(), text: "Bắt đầu trận đấu mới"}];
                 setWinner(null);
                 handleUpdate(newData);
             };
@@ -607,6 +676,30 @@
                         </div>
                     )}
 
+                    {/* History Modal */}
+                    {isHistoryModalOpen && (
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                            <div className={`w-full max-w-lg p-6 rounded-2xl ${glassPanel} glass-effect border flex flex-col max-h-[80vh]`}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-black flex items-center gap-2"><Icon name="refresh" size={20}/> Match History</h3>
+                                    <button onClick={() => setIsHistoryModalOpen(false)}><Icon name="x" size={24} className="opacity-50 hover:opacity-100" /></button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                                    {gameData.history && gameData.history.length > 0 ? (
+                                        gameData.history.map((item) => (
+                                            <div key={item.id} className={`p-3 rounded-xl border ${subPanel} text-sm flex justify-between items-start`}>
+                                                <span className="opacity-70 flex-1 font-medium">{item.text}</span>
+                                                <span className="opacity-40 text-xs whitespace-nowrap ml-2 mt-0.5">{item.time}</span>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-center opacity-40 py-4 text-sm">Chưa có lịch sử</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Config Modal */}
                     {showConfigModal && (
                         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -644,6 +737,7 @@
                             <div className="flex gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
                                 {!isOnline && <button onClick={() => setShowConfigModal(true)} className={`p-2.5 rounded-2xl ${subPanel} text-red-500 animate-pulse`} title="Setup Sync"><Icon name="cloud" size={18} /></button>}
                                 {isOnline && <button onClick={createNewRoom} className={`p-2.5 rounded-2xl ${subPanel} text-cyan-600`} title="Create New Room"><Icon name="plusSquare" size={18} /></button>}
+                                <button onClick={() => setIsHistoryModalOpen(true)} className={`p-2.5 rounded-2xl ${subPanel}`} title="History"><Icon name="history" size={18} /></button>
                                 <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Share Room"><Icon name="share" size={18} /></button>
                                 {lastSessionBackup && <button onClick={recallData} className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 animate-pulse"><Icon name="undo" size={18} /></button>}
                                 <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`p-2.5 rounded-2xl ${subPanel}`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} /></button>
@@ -663,7 +757,7 @@
                         {activeView === 'score' && (
                             <div className="h-full flex flex-col space-y-4 text-center">
                                 {/* Header Controls */}
-                                <div className={`p-4 rounded-[2rem] flex flex-col items-center justify-center ${glassPanel} glass-effect border animate-in fade-in zoom-in duration-300 ${isFocusMode && gameData.gameMode !== 'den' ? 'hidden' : ''}`}>
+                                <div className={`p-4 rounded-[2rem] flex flex-col items-center justify-center ${glassPanel} glass-effect border animate-in fade-in zoom-in duration-300 ${isFocusMode && gameData.gameMode !== 'den' ? 'border-none bg-transparent shadow-none' : ''}`}>
                                     <div className="flex flex-col items-center gap-3 w-full">
                                         {!isFocusMode && (
                                             <div className={`flex p-1 rounded-2xl w-full max-w-[200px] ${subPanel}`}>
@@ -672,15 +766,23 @@
                                             </div>
                                         )}
 
-                                        {gameData.gameMode === '1vs1' && !isFocusMode && (
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span className="text-[10px] font-black uppercase opacity-40">Race To</span>
-                                                <div className="flex items-center gap-10">
-                                                    <button onClick={() => handleUpdate({...gameData, raceTo: Math.max(1, gameData.raceTo - 1)})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="minus" size={18} /></button>
-                                                    <span className="text-6xl font-black text-slate-800 dark:text-white drop-shadow-md race-to-effect">{gameData.raceTo}</span>
-                                                    <button onClick={() => handleUpdate({...gameData, raceTo: gameData.raceTo + 1})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="plus" size={18} /></button>
+                                        {gameData.gameMode === '1vs1' && (
+                                            isFocusMode ? (
+                                                <div className="flex flex-col items-center animate-in zoom-in">
+                                                    <span className="text-[10rem] leading-none font-black text-transparent bg-clip-text bg-gradient-to-br from-fuchsia-500 to-cyan-500 drop-shadow-2xl race-to-effect">
+                                                        {gameData.raceTo}
+                                                    </span>
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <span className="text-[10px] font-black uppercase opacity-40">Race To</span>
+                                                    <div className="flex items-center gap-10">
+                                                        <button onClick={() => handleUpdate({...gameData, raceTo: Math.max(1, gameData.raceTo - 1)})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="minus" size={18} /></button>
+                                                        <span className="text-6xl font-black text-slate-800 dark:text-white drop-shadow-md race-to-effect">{gameData.raceTo}</span>
+                                                        <button onClick={() => handleUpdate({...gameData, raceTo: gameData.raceTo + 1})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="plus" size={18} /></button>
+                                                    </div>
+                                                </div>
+                                            )
                                         )}
 
                                         {gameData.gameMode === 'den' && (
@@ -712,18 +814,22 @@
                                         return (
                                             gameData.gameMode === '1vs1' ? (
                                                 <div key={p.id} className={`relative flex flex-col p-4 rounded-[2.5rem] border overflow-hidden transition-all ${color.card} h-full justify-center`}>
-                                                    <PlayerWatermark name={p.name} />
+                                                    <PlayerWatermark name={p.name} colorClass={color.watermark} />
                                                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.bar}`}></div>
                                                     <div className="flex flex-col h-full items-center py-2 w-full z-10">
                                                         <input type="text" value={p.name} onChange={(e) => editName(gameData.gameMode, p.id, e.target.value)} className="text-center bg-transparent text-xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-2 mb-2 truncate relative z-20" />
                                                         <div className="flex-1 w-full flex flex-col items-center justify-center gap-2">
-                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
-                                                                <Icon name="chevronUp" size={40} />
-                                                            </button>
+                                                            {!isFocusMode && (
+                                                                <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
+                                                                    <Icon name="chevronUp" size={40} />
+                                                                </button>
+                                                            )}
                                                             <span className={`font-black tabular-nums tracking-tighter text-center py-2 ${color.text} text-7xl sm:text-8xl`}>{p.score}</span>
-                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
-                                                                <Icon name="chevronDown" size={40} />
-                                                            </button>
+                                                            {!isFocusMode && (
+                                                                <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
+                                                                    <Icon name="chevronDown" size={40} />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -735,6 +841,8 @@
                                                     gameData={gameData}
                                                     updateScore={updateScore}
                                                     editName={editName}
+                                                    handleDragStart={() => {}}
+                                                    handleDrop={() => {}}
                                                     autoBalance={autoBalance}
                                                     removePlayerDen={removePlayerDen}
                                                     color={color}
