@@ -33,6 +33,11 @@
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        
+        /* Utility to hide scrollbar but keep functionality */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
         .toast-fade-in { animation: fadeInOut 2s ease-in-out forwards; }
         @keyframes fadeInOut {
             0% { opacity: 0; transform: translateY(10px); }
@@ -160,7 +165,8 @@
                 settings: (<><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>),
                 alert: <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />,
                 grip: (<><circle cx="9" cy="12" r="1" /><circle cx="9" cy="5" r="1" /><circle cx="9" cy="19" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="5" r="1" /><circle cx="15" cy="19" r="1" /></>),
-                x: <path d="M18 6L6 18M6 6l12 12" strokeWidth="3" strokeLinecap="round" />
+                x: <path d="M18 6L6 18M6 6l12 12" strokeWidth="3" strokeLinecap="round" />,
+                filter: <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -188,7 +194,6 @@
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
             const [showBalanceConfirm, setShowBalanceConfirm] = useState(false);
 
-            // Calculate Diff
             const currentTotal = gameData.playersDen.reduce((acc, p) => acc + p.score, 0);
             const adjustment = -currentTotal;
             const newScore = player.score + adjustment;
@@ -234,7 +239,6 @@
                         <PlayerWatermark name={player.name} colorClass={color.watermark} />
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.bar}`}></div>
                         
-                        {/* Delete Button (Moved to Top Left for Safety) */}
                         {!isManageMode && (
                             <button 
                                 onClick={() => setShowDeleteConfirm(true)}
@@ -245,10 +249,8 @@
                         )}
 
                         <div className="relative z-10 flex items-center h-full w-full gap-2 mt-0">
-                            
-                            {/* LEFT SIDE: Minus OR Move Down */}
                             {isManageMode ? (
-                                <button onClick={() => movePlayer(index, 1)} className="w-12 h-12 rounded-full flex items-center justify-center bg-white/40 dark:bg-black/20 text-slate-500 active:scale-90 transition-all backdrop-blur-sm">
+                                <button onClick={() => movePlayer(index, 1)} className="w-12 h-12 flex-none rounded-full flex items-center justify-center bg-white/40 dark:bg-black/20 text-slate-500 active:scale-90 transition-all backdrop-blur-sm">
                                     <Icon name="chevronDown" size={24} />
                                 </button>
                             ) : (
@@ -257,7 +259,6 @@
                                 </button>
                             )}
 
-                            {/* CENTER: Name & Score */}
                             <div className="flex-1 flex flex-col items-center justify-center overflow-hidden">
                                 <input 
                                     type="text" 
@@ -281,13 +282,12 @@
                                 </button>
                             </div>
 
-                            {/* RIGHT SIDE: Plus OR Move Up + Delete */}
                             {isManageMode ? (
                                 <div className="flex flex-col gap-2">
-                                     <button onClick={() => setShowDeleteConfirm(true)} className="w-12 h-12 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-500 active:scale-90 transition-all backdrop-blur-sm">
+                                     <button onClick={() => setShowDeleteConfirm(true)} className="w-12 h-12 flex-none rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-500 active:scale-90 transition-all backdrop-blur-sm">
                                         <Icon name="trash" size={20} />
                                     </button>
-                                     <button onClick={() => movePlayer(index, -1)} className="w-12 h-12 rounded-full flex items-center justify-center bg-white/40 dark:bg-black/20 text-slate-500 active:scale-90 transition-all backdrop-blur-sm">
+                                     <button onClick={() => movePlayer(index, -1)} className="w-12 h-12 flex-none rounded-full flex items-center justify-center bg-white/40 dark:bg-black/20 text-slate-500 active:scale-90 transition-all backdrop-blur-sm">
                                         <Icon name="chevronUp" size={24} />
                                     </button>
                                 </div>
@@ -303,7 +303,6 @@
         };
 
         const App = () => {
-            // --- UI CONSTANTS ---
             const [theme, setTheme] = useState('light');
             const themeClasses = theme === 'dark' ? 'bg-[#0a0510] text-slate-100' : 'bg-slate-50 text-slate-900';
             const glassPanel = theme === 'dark' ? 'bg-white/[0.03] border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)]' : 'bg-white/70 border-slate-200 shadow-[0_8px_32px_rgba(0,0,0,0.05)]';
@@ -333,6 +332,7 @@
             const [isFocusMode, setIsFocusMode] = useState(false);
             const [isManageMode, setIsManageMode] = useState(false);
             const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+            const [historyFilter, setHistoryFilter] = useState('all'); // 'all', 'score', 'balance', 'system'
 
             const [user, setUser] = useState(null);
             const [sessionId, setSessionId] = useState(getSessionId());
@@ -464,13 +464,22 @@
             };
             
             // --- Helper to log history ---
-            const addHistory = (prevData, msg) => {
+            const addHistory = (prevData, msg, type = 'info', player = null) => {
+                let scoreSnapshot = '';
+                if (prevData.gameMode === '1vs1') {
+                    scoreSnapshot = `${prevData.players1vs1[0].name}: ${prevData.players1vs1[0].score} - ${prevData.players1vs1[1].name}: ${prevData.players1vs1[1].score}`;
+                } else {
+                    scoreSnapshot = prevData.playersDen.map(p => ({ n: p.name, s: p.score }));
+                }
+
                 const newEntry = {
                     id: Date.now(),
                     time: getCurrentTime(),
-                    text: msg
+                    text: msg,
+                    type: type,
+                    snapshot: scoreSnapshot
                 };
-                return [newEntry, ...(prevData.history || [])].slice(0, 50); // Limit to 50 items
+                return [newEntry, ...(prevData.history || [])].slice(0, 100);
             };
 
             const updateScore = (mode, id, delta) => {
@@ -509,25 +518,15 @@
                 }
                 
                 const changeStr = delta > 0 ? `+${delta}` : `${delta}`;
-                newData.history = addHistory(newData, `${playerName}: ${changeStr} (${oldScore} → ${newScore})`);
+                newData.history = addHistory(newData, `${playerName}: ${changeStr} (${oldScore} → ${newScore})`, 'score');
                 
                 handleUpdate(newData);
             };
 
             const editName = (mode, id, newName) => {
                 const newData = { ...gameData };
-                let oldName = "";
-                if (mode === '1vs1') {
-                    newData.players1vs1 = gameData.players1vs1.map(p => {
-                        if(p.id === id) { oldName = p.name; return { ...p, name: newName }; }
-                        return p;
-                    });
-                } else {
-                    newData.playersDen = gameData.playersDen.map(p => {
-                        if(p.id === id) { oldName = p.name; return { ...p, name: newName }; }
-                        return p;
-                    });
-                }
+                if (mode === '1vs1') newData.players1vs1 = gameData.players1vs1.map(p => p.id === id ? { ...p, name: newName } : p);
+                else newData.playersDen = gameData.playersDen.map(p => p.id === id ? { ...p, name: newName } : p);
                 handleUpdate(newData);
             };
 
@@ -542,7 +541,7 @@
                     personal: 0,
                     colorIdx: nextColorIdx 
                 }];
-                newData.history = addHistory(newData, `Thêm người chơi: ${newName}`);
+                newData.history = addHistory(newData, `Thêm người chơi: ${newName}`, 'system');
                 handleUpdate(newData);
             };
 
@@ -552,7 +551,7 @@
                 const playerToRemove = newData.playersDen.find(p => p.id === id);
                 newData.playersDen = gameData.playersDen.filter(p => p.id !== id);
                 if (playerToRemove) {
-                    newData.history = addHistory(newData, `Xóa người chơi: ${playerToRemove.name}`);
+                    newData.history = addHistory(newData, `Xóa người chơi: ${playerToRemove.name}`, 'system');
                 }
                 handleUpdate(newData);
             };
@@ -576,7 +575,7 @@
                     return p;
                 });
                 
-                newData.history = addHistory(newData, `Cân bằng điểm: ${playerName} (${oldScore} → ${newScore})`);
+                newData.history = addHistory(newData, `Cân bằng: ${playerName} (${oldScore} → ${newScore})`, 'balance');
                 handleUpdate(newData);
             };
 
@@ -597,7 +596,7 @@
             const resetAllData = () => {
                 setLastSessionBackup(gameData);
                 const newData = JSON.parse(JSON.stringify(DEFAULT_GAME_DATA));
-                newData.history = [{id: Date.now(), time: getCurrentTime(), text: "Bắt đầu trận đấu mới"}];
+                newData.history = [{id: Date.now(), time: getCurrentTime(), text: "Bắt đầu trận đấu mới", type: 'system', snapshot: ''}];
                 setWinner(null);
                 handleUpdate(newData);
             };
@@ -607,6 +606,14 @@
                 handleUpdate(lastSessionBackup);
                 setLastSessionBackup(null);
             };
+
+            // Filter history items
+            const filteredHistory = useMemo(() => {
+                if (!gameData.history) return [];
+                if (historyFilter === 'all') return gameData.history;
+                return gameData.history.filter(item => item.type === historyFilter);
+            }, [gameData.history, historyFilter]);
+
 
             const billingData = useMemo(() => {
                 const players = gameData.gameMode === '1vs1' ? gameData.players1vs1 : gameData.playersDen;
@@ -680,16 +687,65 @@
                     {isHistoryModalOpen && (
                         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                             <div className={`w-full max-w-lg p-6 rounded-2xl ${glassPanel} glass-effect border flex flex-col max-h-[80vh]`}>
-                                <div className="flex justify-between items-center mb-4">
+                                <div className="flex justify-between items-center mb-2">
                                     <h3 className="text-lg font-black flex items-center gap-2"><Icon name="refresh" size={20}/> Match History</h3>
                                     <button onClick={() => setIsHistoryModalOpen(false)}><Icon name="x" size={24} className="opacity-50 hover:opacity-100" /></button>
                                 </div>
-                                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                                    {gameData.history && gameData.history.length > 0 ? (
-                                        gameData.history.map((item) => (
-                                            <div key={item.id} className={`p-3 rounded-xl border ${subPanel} text-sm flex justify-between items-start`}>
-                                                <span className="opacity-70 flex-1 font-medium">{item.text}</span>
-                                                <span className="opacity-40 text-xs whitespace-nowrap ml-2 mt-0.5">{item.time}</span>
+                                
+                                {/* FIX: Filter Container Improved */}
+                                {/* Sử dụng -mx-2 và px-2 để mở rộng vùng hiển thị shadow nhưng vẫn giữ lề */}
+                                {/* py-2 để tránh việc shadow bị cắt ở trên/dưới */}
+                                <div className="w-full mb-2">
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-3 pt-1 px-1 no-scrollbar touch-pan-x w-full max-w-full">
+                                        <button 
+                                            onClick={() => setHistoryFilter('all')} 
+                                            className={`flex-shrink-0 h-10 px-4 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-sm border border-transparent ${historyFilter === 'all' ? 'bg-fuchsia-600 text-white shadow-fuchsia-500/30 shadow-lg scale-105' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'}`}
+                                        >
+                                            Tất cả
+                                        </button>
+                                        <button 
+                                            onClick={() => setHistoryFilter('score')} 
+                                            className={`flex-shrink-0 h-10 px-4 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-sm border border-transparent ${historyFilter === 'score' ? 'bg-fuchsia-600 text-white shadow-fuchsia-500/30 shadow-lg scale-105' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'}`}
+                                        >
+                                            Ghi điểm
+                                        </button>
+                                        <button 
+                                            onClick={() => setHistoryFilter('balance')} 
+                                            className={`flex-shrink-0 h-10 px-4 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-sm border border-transparent ${historyFilter === 'balance' ? 'bg-fuchsia-600 text-white shadow-fuchsia-500/30 shadow-lg scale-105' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'}`}
+                                        >
+                                            Cân bằng
+                                        </button>
+                                        <button 
+                                            onClick={() => setHistoryFilter('system')} 
+                                            className={`flex-shrink-0 h-10 px-4 rounded-xl text-xs font-bold whitespace-nowrap transition-all shadow-sm border border-transparent ${historyFilter === 'system' ? 'bg-fuchsia-600 text-white shadow-fuchsia-500/30 shadow-lg scale-105' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'}`}
+                                        >
+                                            Hệ thống
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
+                                    {filteredHistory.length > 0 ? (
+                                        filteredHistory.map((item) => (
+                                            <div key={item.id} className={`p-3 rounded-xl border ${subPanel} text-sm flex flex-col gap-2`}>
+                                                <div className="flex justify-between items-start">
+                                                    <span className="font-bold text-slate-700 dark:text-slate-200">{item.text}</span>
+                                                    <span className="opacity-40 text-xs whitespace-nowrap ml-2">{item.time}</span>
+                                                </div>
+                                                {/* Snapshot Display */}
+                                                {item.snapshot && (
+                                                    <div className="text-xs opacity-60 bg-black/5 dark:bg-white/5 p-2 rounded-lg mt-1 font-mono">
+                                                        {typeof item.snapshot === 'string' ? (
+                                                            item.snapshot
+                                                        ) : (
+                                                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                                                {item.snapshot.map((p, idx) => (
+                                                                    <span key={idx}>{p.n}: <strong className={p.s < 0 ? 'text-red-500' : 'text-green-500'}>{p.s}</strong></span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         ))
                                     ) : (
@@ -819,17 +875,13 @@
                                                     <div className="flex flex-col h-full items-center py-2 w-full z-10">
                                                         <input type="text" value={p.name} onChange={(e) => editName(gameData.gameMode, p.id, e.target.value)} className="text-center bg-transparent text-xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-2 mb-2 truncate relative z-20" />
                                                         <div className="flex-1 w-full flex flex-col items-center justify-center gap-2">
-                                                            {!isFocusMode && (
-                                                                <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
-                                                                    <Icon name="chevronUp" size={40} />
-                                                                </button>
-                                                            )}
+                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`w-full flex-1 min-h-[60px] rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all ${isFocusMode ? 'opacity-30 hover:opacity-100' : ''}`}>
+                                                                <Icon name="chevronUp" size={40} />
+                                                            </button>
                                                             <span className={`font-black tabular-nums tracking-tighter text-center py-2 ${color.text} text-7xl sm:text-8xl`}>{p.score}</span>
-                                                            {!isFocusMode && (
-                                                                <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`w-full flex-1 rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all`}>
-                                                                    <Icon name="chevronDown" size={40} />
-                                                                </button>
-                                                            )}
+                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`w-full flex-1 min-h-[60px] rounded-2xl flex items-center justify-center bg-transparent text-slate-500 ${color.btn} active:scale-95 transition-all ${isFocusMode ? 'opacity-30 hover:opacity-100' : ''}`}>
+                                                                <Icon name="chevronDown" size={40} />
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
