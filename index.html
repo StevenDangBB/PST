@@ -64,6 +64,7 @@
         };
 
         // --- Configuration ---
+        // Ưu tiên config từ localStorage (cho GitHub Pages), sau đó mới đến biến môi trường
         const getFirebaseConfig = () => {
             const localConfig = localStorage.getItem('pst_firebase_config');
             if (localConfig) return JSON.parse(localConfig);
@@ -269,11 +270,26 @@
 
             const handleSaveConfig = () => {
                 try {
-                    JSON.parse(configInput);
-                    localStorage.setItem('pst_firebase_config', configInput);
+                    // Xử lý thông minh hơn: Tự tìm JSON object nếu người dùng copy thừa code JS
+                    let cleanedInput = configInput.trim();
+                    const firstBrace = cleanedInput.indexOf('{');
+                    const lastBrace = cleanedInput.lastIndexOf('}');
+                    
+                    if (firstBrace !== -1 && lastBrace !== -1) {
+                        cleanedInput = cleanedInput.substring(firstBrace, lastBrace + 1);
+                    }
+
+                    const config = JSON.parse(cleanedInput);
+                    
+                    // Validate sơ bộ
+                    if (!config.apiKey || !config.authDomain) {
+                        throw new Error("Thiếu apiKey hoặc authDomain");
+                    }
+
+                    localStorage.setItem('pst_firebase_config', JSON.stringify(config));
                     window.location.reload();
                 } catch (e) {
-                    alert("Invalid JSON Config");
+                    alert("Cấu hình không hợp lệ. Hãy chắc chắn bạn copy đúng đoạn JSON trong dấu { ... }");
                 }
             };
             
@@ -392,9 +408,9 @@
                     {permissionError && (
                         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-6">
                             <div className="bg-red-900/20 border border-red-500 text-red-500 p-6 rounded-2xl max-w-sm text-center">
-                                <h3 className="font-bold text-lg mb-2">Lỗi Quyền Truy Cập (Permissions)</h3>
-                                <p className="text-sm mb-4">Bạn đang sử dụng Firebase cá nhân nhưng chưa mở quyền ghi (Rules). Hãy vào Firebase Console -> Firestore Database -> Rules và đổi "allow read, write: if false;" thành "true".</p>
-                                <button onClick={() => setPermissionError(false)} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold">Đã hiểu</button>
+                                <h3 className="font-bold text-lg mb-2">Permission Error</h3>
+                                <p className="text-sm mb-4">You are using personal Firebase but haven't enabled Write permissions. Go to Firebase Console -> Firestore Database -> Rules and change "allow read, write: if false;" to "true".</p>
+                                <button onClick={() => setPermissionError(false)} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold">Got it</button>
                             </div>
                         </div>
                     )}
@@ -403,17 +419,17 @@
                     {showConfigModal && (
                         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                             <div className={`w-full max-w-lg p-6 rounded-2xl ${glassPanel} glass-effect border`}>
-                                <h3 className="text-lg font-black mb-4">Cấu hình Firebase (Cho GitHub Pages)</h3>
-                                <p className="text-xs mb-2 opacity-70">Paste config JSON từ Firebase Console vào đây để bật tính năng đồng bộ:</p>
+                                <h3 className="text-lg font-black mb-4">Firebase Config (For GitHub Pages)</h3>
+                                <p className="text-xs mb-2 opacity-70">Paste your Firebase JSON config here to enable Sync:</p>
                                 <textarea 
                                     className={`w-full h-32 p-3 text-xs rounded-xl mb-4 font-mono ${subPanel} bg-transparent border focus:outline-none`} 
-                                    placeholder='{"apiKey": "...", "authDomain": "...", ...}'
+                                    placeholder='{"apiKey": "AIza...", "authDomain": "...", ...}'
                                     value={configInput}
                                     onChange={(e) => setConfigInput(e.target.value)}
                                 />
                                 <div className="flex gap-2">
-                                    <button onClick={handleSaveConfig} className="flex-1 py-3 bg-fuchsia-600 text-white font-bold rounded-xl">Lưu & Khởi động lại</button>
-                                    <button onClick={() => setShowConfigModal(false)} className="px-4 py-3 bg-slate-500/20 text-slate-400 font-bold rounded-xl">Đóng</button>
+                                    <button onClick={handleSaveConfig} className="flex-1 py-3 bg-fuchsia-600 text-white font-bold rounded-xl">Save & Reload</button>
+                                    <button onClick={() => setShowConfigModal(false)} className="px-4 py-3 bg-slate-500/20 text-slate-400 font-bold rounded-xl">Close</button>
                                 </div>
                             </div>
                         </div>
@@ -439,7 +455,7 @@
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            {!isOnline && <button onClick={() => setShowConfigModal(true)} className={`p-2.5 rounded-2xl ${subPanel} text-red-500 animate-pulse`} title="Thiết lập Sync"><Icon name="cloudOff" size={18} /></button>}
+                            {!isOnline && <button onClick={() => setShowConfigModal(true)} className={`p-2.5 rounded-2xl ${subPanel} text-red-500 animate-pulse`} title="Setup Sync"><Icon name="cloud" size={18} /></button>}
                             {isOnline && <button onClick={createNewRoom} className={`p-2.5 rounded-2xl ${subPanel} text-cyan-600`} title="Create New Room"><Icon name="plusSquare" size={18} /></button>}
                             <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Share Room"><Icon name="share" size={18} /></button>
                             {lastSessionBackup && <button onClick={recallData} className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 animate-pulse"><Icon name="undo" size={18} /></button>}
