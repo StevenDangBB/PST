@@ -101,6 +101,7 @@
         };
 
         const App = () => {
+            // --- UI CONSTANTS ---
             const [theme, setTheme] = useState('light');
             const themeClasses = theme === 'dark' ? 'bg-[#0a0510] text-slate-100' : 'bg-slate-50 text-slate-900';
             const glassPanel = theme === 'dark' ? 'bg-white/[0.03] border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)]' : 'bg-white/70 border-slate-200 shadow-[0_8px_32px_rgba(0,0,0,0.05)]';
@@ -122,8 +123,10 @@
             const [lastSessionBackup, setLastSessionBackup] = useState(null);
             const [syncing, setSyncing] = useState(false);
             const [showCopied, setShowCopied] = useState(false);
+            const [isInitialLoad, setIsInitialLoad] = useState(true);
             const [ocrLoading, setOcrLoading] = useState(false);
 
+            // --- SYNC STATES ---
             const [user, setUser] = useState(null);
             const [sessionId, setSessionId] = useState(getSessionId());
 
@@ -144,7 +147,7 @@
                 ]
             });
 
-            // Effect: Initialize Firebase Auth
+            // Effect: Initialize Firebase & Auth
             useEffect(() => {
                 if (!firebaseConfig || !window.FirebaseCore) return;
                 const { initializeApp } = window.FirebaseCore;
@@ -160,7 +163,7 @@
                         } else {
                             await signInAnonymously(auth);
                         }
-                    } catch (e) { console.error("Auth error:", e); }
+                    } catch (e) { console.error("Lỗi đăng nhập:", e); }
                 };
 
                 initAuth();
@@ -175,7 +178,7 @@
                 };
             }, []);
 
-            // Effect: Listen to Room Data
+            // Effect: Listen to Room Data Real-time
             useEffect(() => {
                 if (!user || !window.FirebaseStore) return;
                 const { getFirestore, doc, onSnapshot, setDoc } = window.FirebaseStore;
@@ -186,32 +189,92 @@
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        if (JSON.stringify(data) !== JSON.stringify(gameData)) {
-                            setGameData(data);
-                        }
+                        setGameData(data);
+                        setIsInitialLoad(false);
                     } else {
                         setDoc(docRef, gameData);
+                        setIsInitialLoad(false);
                     }
                     setSyncing(false);
-                }, (err) => { console.error("Firestore listen error:", err); setSyncing(false); });
+                }, (err) => { 
+                    console.error("Lỗi Firestore:", err); 
+                    setSyncing(false); 
+                });
 
                 return () => unsubscribe();
             }, [user, sessionId]);
 
             const saveToCloud = async (newData) => {
-                if (!user || !window.FirebaseStore) return;
+                if (!user || !window.FirebaseStore || isInitialLoad) return;
                 setSyncing(true);
                 try {
                     const { getFirestore, doc, setDoc } = window.FirebaseStore;
                     const db = getFirestore();
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
                     await setDoc(docRef, newData);
-                } catch (e) { console.error("Cloud save failed:", e); } finally { setSyncing(false); }
+                } catch (e) { console.error("Lưu thất bại:", e); } finally { setSyncing(false); }
             };
 
             const handleUpdate = (newData) => {
+                if (isInitialLoad) return;
                 setGameData(newData);
                 saveToCloud(newData);
+            };
+
+            // --- Gemini OCR Logic ---
+            const handleOCR = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setOcrLoading(true);
+                try {
+                    const base64Data = await fileToBase64(file);
+                    
+                    const systemPrompt = `
+                        Bạn là trợ lý đọc hóa đơn bida. Hãy trích xuất dữ liệu từ ảnh hóa đơn và trả về JSON:
+                        {
+                            "table_hourly_fee": number (tiền giờ chơi),
+                            "total_other_items": number (tổng tiền các món khác như nước, thuốc lá, mồi...)
+                        }
+                        Lưu ý: Chỉ trả về JSON nguyên bản, không dùng markdown. Nếu không thấy tiền giờ, để là 0.
+                    `;
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            contents: [{
+                                role: "user",
+                                parts: [
+                                    { text: "Hãy phân tích hóa đơn này." },
+                                    { inlineData: { mimeType: "image/png", data: base64Data } }
+                                ]
+                            }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] },
+                            generationConfig: { responseMimeType: "application/json" }
+                        })
+                    });
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) {
+                        const parsed = JSON.parse(text);
+                        let newData = { ...gameData };
+                        newData.tableBill = parsed.table_hourly_fee || 0;
+                        
+                        // Cộng tổng chi phí riêng vào người chơi đầu tiên làm mặc định
+                        if (newData.gameMode === '1vs1') {
+                            newData.players1vs1[0].personal += (parsed.total_other_items || 0);
+                        } else {
+                            newData.playersDen[0].personal += (parsed.total_other_items || 0);
+                        }
+
+                        handleUpdate(newData);
+                    }
+                } catch (error) {
+                    console.error("Lỗi OCR:", error);
+                } finally {
+                    setOcrLoading(false);
+                }
             };
 
             const updateScore = (mode, id, delta) => {
@@ -297,70 +360,6 @@
                 }
             }, [gameData]);
 
-            // --- Gemini OCR Logic ---
-            const handleOCR = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                setOcrLoading(true);
-                try {
-                    const base64Data = await fileToBase64(file);
-                    
-                    const systemPrompt = `
-                        Bạn là một chuyên gia đọc hóa đơn bida. 
-                        Hãy trích xuất thông tin từ ảnh này và trả về JSON:
-                        {
-                            "table_hourly_fee": number (tổng tiền giờ chơi),
-                            "items": [
-                                { "name": string, "price": number, "suggested_player": string (nếu tên món có gợi ý tên người) }
-                            ]
-                        }
-                        Lưu ý: Chỉ trả về JSON nguyên bản, không dùng markdown block. Nếu không thấy tiền giờ, để là 0.
-                    `;
-
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            contents: [{
-                                role: "user",
-                                parts: [
-                                    { text: "Phân tích hóa đơn này và liệt kê chi phí." },
-                                    { inlineData: { mimeType: "image/png", data: base64Data } }
-                                ]
-                            }],
-                            systemInstruction: { parts: [{ text: systemPrompt }] },
-                            generationConfig: { responseMimeType: "application/json" }
-                        })
-                    });
-
-                    const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) {
-                        const parsed = JSON.parse(text);
-                        
-                        let newData = { ...gameData };
-                        newData.tableBill = parsed.table_hourly_fee || 0;
-                        
-                        // Phân bổ item vào các player nếu có gợi ý, không thì cộng dồn hoặc chia đều (ở đây ta ưu tiên gợi ý)
-                        // Trong demo này, ta cộng các items không có gợi ý vào player đầu tiên hoặc chia vào personal.
-                        const totalPersonal = parsed.items?.reduce((acc, item) => acc + (item.price || 0), 0) || 0;
-                        
-                        // Cập nhật personal cho player đầu tiên như một ví dụ cơ bản
-                        if (newData.gameMode === '1vs1') {
-                            newData.players1vs1[0].personal = totalPersonal;
-                        } else {
-                            newData.playersDen[0].personal = totalPersonal;
-                        }
-
-                        handleUpdate(newData);
-                    }
-                } catch (error) {
-                    console.error("OCR Error:", error);
-                } finally {
-                    setOcrLoading(false);
-                }
-            };
-
             const shareRoom = () => {
                 const url = window.location.href;
                 const t = document.createElement("textarea");
@@ -388,12 +387,12 @@
                         <div className="flex items-center gap-3">
                             <div className="bg-fuchsia-600 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg rotate-3 relative">
                                 <Icon name="target" className="text-white" />
-                                {syncing && <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>}
+                                {syncing && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-cyan-400 rounded-full animate-ping"></div>}
                             </div>
                             <div>
                                 <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent uppercase">PST LIVE</h1>
-                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400">
-                                    BÀN: {sessionId}
+                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400 flex items-center gap-1">
+                                    BÀN: <span className="text-fuchsia-500">{sessionId}</span>
                                 </span>
                             </div>
                         </div>
@@ -411,8 +410,19 @@
                     </div>
 
                     <main className="flex-1 flex flex-col overflow-hidden px-6 py-4">
+                        {winner && (
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl p-6 text-center">
+                                <div className={`w-full max-w-sm p-12 rounded-[3.5rem] border-2 border-fuchsia-500/30 ${glassPanel} glass-effect`}>
+                                    <div className="bg-fuchsia-600 w-24 h-24 rounded-[2rem] mx-auto flex items-center justify-center mb-8 shadow-2xl rotate-6"><Icon name="trophy" size={48} className="text-white" /></div>
+                                    <h2 className="text-4xl font-black mb-2 italic text-white uppercase">Thắng cuộc!</h2>
+                                    <p className="text-2xl text-fuchsia-400 font-bold uppercase mb-10 tracking-wider text-center">{winner}</p>
+                                    <button onClick={() => setWinner(null)} className="w-full py-5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white font-black rounded-3xl shadow-xl">TIẾP TỤC</button>
+                                </div>
+                            </div>
+                        )}
+
                         {activeView === 'score' && (
-                            <div className="h-full flex flex-col space-y-4">
+                            <div className="h-full flex flex-col space-y-4 text-center">
                                 <div className={`p-4 rounded-[2rem] flex flex-col items-center justify-center ${glassPanel} glass-effect border`}>
                                     <div className="flex flex-col items-center gap-3 w-full">
                                         <div className={`flex p-1 rounded-2xl w-32 ${subPanel}`}>
@@ -471,7 +481,6 @@
                                                 <h3 className="text-xl font-black uppercase">Quyết toán</h3>
                                             </div>
                                             
-                                            {/* OCR Button */}
                                             <label className={`relative flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-lg cursor-pointer active:scale-95 transition-all ${ocrLoading ? 'opacity-50' : ''}`}>
                                                 <Icon name="camera" size={16} /> 
                                                 {ocrLoading ? 'Đang quét...' : 'Quét Bill'}
@@ -532,9 +541,9 @@
                                                 <div key={p.id} className={`p-5 rounded-[1.5rem] flex flex-col gap-3 border ${theme === 'dark' ? 'bg-white/[0.02]' : 'bg-white/80 shadow-sm'} text-left`}>
                                                     <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase opacity-40">{p.name}</span><span className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{p.total.toLocaleString()}đ</span></div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        <div className="px-2 py-1 bg-slate-200/50 rounded-lg text-[8px] font-bold">Tiền giờ: {Math.round(p.tableShare).toLocaleString()}</div>
-                                                        {p.personal > 0 && <div className="px-2 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[8px] font-bold uppercase">Riêng: {p.personal.toLocaleString()}</div>}
-                                                        {p.gameExchange !== undefined && p.gameExchange !== 0 && <div className={`px-2 py-1 rounded-lg text-[8px] font-bold ${p.gameExchange > 0 ? 'bg-red-500/10 text-red-500' : 'bg-fuchsia-500/10 text-fuchsia-600'}`}>{p.gameExchange > 0 ? `Đền: +${p.gameExchange.toLocaleString()}` : `Thắng: ${p.gameExchange.toLocaleString()}`}</div>}
+                                                        <div className="px-2 py-1 bg-slate-200/50 rounded-lg text-[8px] font-bold uppercase tracking-wider">Tiền giờ: {Math.round(p.tableShare).toLocaleString()}</div>
+                                                        {p.personal > 0 && <div className="px-2 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[8px] font-bold uppercase tracking-wider">Riêng: {p.personal.toLocaleString()}</div>}
+                                                        {p.gameExchange !== undefined && p.gameExchange !== 0 && <div className={`px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-wider ${p.gameExchange > 0 ? 'bg-red-500/10 text-red-500' : 'bg-fuchsia-500/10 text-fuchsia-600'}`}>{p.gameExchange > 0 ? `Đền: +${p.gameExchange.toLocaleString()}` : `Thắng: ${p.gameExchange.toLocaleString()}`}</div>}
                                                     </div>
                                                 </div>
                                             );
