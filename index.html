@@ -182,7 +182,7 @@
                 };
             }, []);
 
-            // Effect 2: Listen to Room Data (STRICT SYNC)
+            // Effect 2: Listen to Room Data
             useEffect(() => {
                 if (!user || !window.FirebaseStore) return;
                 const { getFirestore, doc, onSnapshot, setDoc } = window.FirebaseStore;
@@ -192,12 +192,9 @@
 
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
-                        // FOUND DATA: Update local state to match cloud (SOURCE OF TRUTH)
                         const data = docSnap.data();
                         setGameData(data);
                     } else {
-                        // NO DATA: Only CREATE defaults if we are absolutely sure it's a new room
-                        // and we are not just waiting for a connection
                         const resetData = JSON.parse(JSON.stringify(DEFAULT_GAME_DATA));
                         setDoc(docRef, resetData);
                         setGameData(resetData);
@@ -220,16 +217,13 @@
                     const { getFirestore, doc, setDoc } = window.FirebaseStore;
                     const db = getFirestore();
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
-                    await setDoc(docRef, newData); // Overwrite with new data state
+                    await setDoc(docRef, newData); 
                 } catch (e) { console.error("Save failed:", e); } finally { setSyncing(false); }
             };
 
-            // This is the CRITICAL fix: Direct update, no optimistic UI that gets overwritten
             const handleUpdate = (newData) => {
                 if (isLoadingRoom) return;
-                // Optimistic update locally for speed
                 setGameData(newData);
-                // Then send to cloud
                 saveToCloud(newData);
             };
 
@@ -404,20 +398,37 @@
                                     </div>
                                 </div>
 
-                                <div className="flex-1 flex flex-col gap-4 pb-4 overflow-y-auto pr-1">
+                                <div className={`flex-1 gap-4 pb-4 pr-1 ${gameData.gameMode === '1vs1' ? 'grid grid-cols-2 overflow-hidden' : 'flex flex-col overflow-y-auto'}`}>
                                     {(gameData.gameMode === '1vs1' ? gameData.players1vs1 : gameData.playersDen).map((p, idx) => {
                                         const color = playerColors[idx % playerColors.length];
                                         return (
-                                            <div key={p.id} className={`flex-1 min-h-[140px] flex flex-col p-4 rounded-[2.5rem] border relative overflow-hidden transition-all ${color.card}`}>
+                                            <div key={p.id} className={`relative flex flex-col p-4 rounded-[2.5rem] border overflow-hidden transition-all ${color.card} ${gameData.gameMode === '1vs1' ? 'h-full justify-center' : 'flex-1 min-h-[140px] justify-between'}`}>
                                                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.bar}`}></div>
-                                                <div className="flex flex-col h-full justify-between items-center py-2">
-                                                    <input type="text" value={p.name} onChange={(e) => editName(gameData.gameMode, p.id, e.target.value)} className="text-center bg-transparent text-2xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-2" />
-                                                    <div className="flex-1 w-full flex items-center justify-between relative px-2">
-                                                        <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/60 text-red-500 shadow-sm border border-slate-200/30 active:scale-90"><Icon name="minus" size={24} /></button>
-                                                        <span className="text-7xl font-black tabular-nums tracking-tighter text-center flex-1">{p.score}</span>
-                                                        <div className="flex items-center gap-1">
+                                                <div className="flex flex-col h-full items-center py-2 w-full">
+                                                    
+                                                    {/* Name Input */}
+                                                    <input type="text" value={p.name} onChange={(e) => editName(gameData.gameMode, p.id, e.target.value)} className="text-center bg-transparent text-xl font-black uppercase tracking-tighter opacity-80 focus:opacity-100 focus:outline-none w-full px-2 mb-2 truncate" />
+                                                    
+                                                    {/* Controls Container */}
+                                                    <div className={`flex-1 w-full flex items-center relative px-1 gap-2 ${gameData.gameMode === '1vs1' ? 'flex-row justify-between' : 'flex-row justify-between'}`}>
+                                                        
+                                                        {/* Minus Button */}
+                                                        <button onClick={() => updateScore(gameData.gameMode, p.id, -1)} className={`rounded-2xl flex items-center justify-center bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 shadow-md border border-red-100 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-slate-700 active:scale-90 transition-all ${gameData.gameMode === '1vs1' ? 'w-12 h-32' : 'w-12 h-12'}`}>
+                                                            <Icon name="minus" size={24} />
+                                                        </button>
+                                                        
+                                                        {/* Score */}
+                                                        <span className={`font-black tabular-nums tracking-tighter text-center flex-1 ${gameData.gameMode === '1vs1' ? 'text-8xl' : 'text-7xl'}`}>
+                                                            {p.score}
+                                                        </span>
+                                                        
+                                                        {/* Right Side Actions */}
+                                                        <div className="flex items-center gap-2">
                                                             {gameData.gameMode === 'den' && gameData.playersDen.length > 2 && <button onClick={() => removePlayerDen(p.id)} className="p-2 text-slate-300 active:text-red-500"><Icon name="trash" size={16} /></button>}
-                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg active:scale-90 ${color.btn}`}><Icon name="plus" size={24} /></button>
+                                                            
+                                                            <button onClick={() => updateScore(gameData.gameMode, p.id, 1)} className={`rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-90 transition-all ${color.btn} ${gameData.gameMode === '1vs1' ? 'w-12 h-32' : 'w-12 h-12'}`}>
+                                                                <Icon name="plus" size={gameData.gameMode === '1vs1' ? 32 : 24} />
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
