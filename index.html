@@ -14,9 +14,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        window.FirebaseSDK = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, setDoc, onSnapshot };
+        window.FirebaseCore = { initializeApp };
+        window.FirebaseAuth = { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken };
+        window.FirebaseStore = { getFirestore, doc, setDoc, onSnapshot, collection };
     </script>
     <!-- Thư viện hiệu ứng pháo giấy -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -30,8 +32,6 @@
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
-        
-        /* Hiệu ứng Toast thông báo sao chép */
         .toast-fade-in { animation: fadeInOut 2s ease-in-out forwards; }
         @keyframes fadeInOut {
             0% { opacity: 0; transform: translateY(10px); }
@@ -47,7 +47,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Helper: Lấy Session ID từ URL ---
+        // --- Global Helpers ---
         const getSessionId = () => {
             try {
                 return window.location.hash.replace('#', '') || 'lobby';
@@ -56,14 +56,14 @@
             }
         };
 
-        // --- Kiểm tra và nạp cấu hình an toàn ---
+        // --- Cấu hình Firebase an toàn ---
         let firebaseConfig = null;
         try {
-            if (typeof __firebase_config !== 'undefined') {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             }
         } catch (e) {
-            console.warn("Firebase config not found. Local session enabled.");
+            console.warn("Firebase config not available. Running in Local Mode.");
         }
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'pst-tool-v2';
@@ -94,14 +94,34 @@
         };
 
         const App = () => {
-            const [user, setUser] = useState(null);
-            const [sessionId, setSessionId] = useState(getSessionId());
+            // --- UI STATES ---
             const [theme, setTheme] = useState('light');
+            
+            // --- UI CONSTANTS (Moved to top to prevent ReferenceError) ---
+            const themeClasses = theme === 'dark' ? 'bg-[#0a0510] text-slate-100' : 'bg-slate-50 text-slate-900';
+            const glassPanel = theme === 'dark' ? 'bg-white/[0.03] border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)]' : 'bg-white/70 border-slate-200 shadow-[0_8px_32px_rgba(0,0,0,0.05)]';
+            const subPanel = theme === 'dark' ? 'bg-black/40 border-white/5' : 'bg-white border border-slate-200';
+
+            const playerColors = [
+                { card: theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50', bar: 'bg-blue-500', btn: 'bg-blue-600' },
+                { card: theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50', bar: 'bg-red-500', btn: 'bg-red-600' },
+                { card: theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50', bar: 'bg-emerald-500', btn: 'bg-emerald-600' },
+                { card: theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50', bar: 'bg-amber-500', btn: 'bg-amber-600' },
+                { card: theme === 'dark' ? 'bg-fuchsia-900/20' : 'bg-fuchsia-50', bar: 'bg-fuchsia-500', btn: 'bg-fuchsia-600' },
+                { card: theme === 'dark' ? 'bg-indigo-900/20' : 'bg-indigo-50', bar: 'bg-indigo-500', btn: 'bg-indigo-600' },
+                { card: theme === 'dark' ? 'bg-orange-900/20' : 'bg-orange-50', bar: 'bg-orange-500', btn: 'bg-orange-600' },
+                { card: theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50', bar: 'bg-teal-500', btn: 'bg-teal-600' },
+            ];
+
             const [activeView, setActiveView] = useState('score');
             const [winner, setWinner] = useState(null);
             const [lastSessionBackup, setLastSessionBackup] = useState(null);
             const [syncing, setSyncing] = useState(false);
             const [showCopied, setShowCopied] = useState(false);
+
+            // --- SYNC STATES ---
+            const [user, setUser] = useState(null);
+            const [sessionId, setSessionId] = useState(getSessionId());
 
             const [gameData, setGameData] = useState({
                 gameMode: '1vs1',
@@ -122,9 +142,10 @@
 
             // Firebase Logic
             useEffect(() => {
-                if (!firebaseConfig || !window.FirebaseSDK) return;
-                
-                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } = window.FirebaseSDK;
+                if (!firebaseConfig || !window.FirebaseCore) return;
+                const { initializeApp } = window.FirebaseCore;
+                const { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } = window.FirebaseAuth;
+
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
 
@@ -135,65 +156,56 @@
                         } else {
                             await signInAnonymously(auth);
                         }
-                    } catch (e) { console.error("Auth error:", e); }
+                    } catch (e) { console.error("Auth init error:", e); }
                 };
+
                 initAuth();
-                
-                const unsubscribeAuth = onAuthStateChanged(auth, setUser);
-                
-                const handleHashChange = () => setSessionId(getSessionId());
-                window.addEventListener('hashchange', handleHashChange);
-                
+                const unsubscribe = onAuthStateChanged(auth, setUser);
+
+                const handleHash = () => setSessionId(getSessionId());
+                window.addEventListener('hashchange', handleHash);
+
                 return () => {
-                    unsubscribeAuth();
-                    window.removeEventListener('hashchange', handleHashChange);
+                    unsubscribe();
+                    window.removeEventListener('hashchange', handleHash);
                 };
             }, []);
 
             useEffect(() => {
-                if (!user || !firebaseConfig || !window.FirebaseSDK) return;
-                
-                const { getFirestore, doc, onSnapshot } = window.FirebaseSDK;
+                if (!user || !window.FirebaseStore) return;
+                const { getFirestore, doc, onSnapshot, setDoc } = window.FirebaseStore;
                 const db = getFirestore();
                 setSyncing(true);
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
-                
+
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
-                        setGameData(docSnap.data());
+                        const data = docSnap.data();
+                        setGameData(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
                     } else {
-                        const { setDoc } = window.FirebaseSDK;
                         setDoc(docRef, gameData);
                     }
                     setSyncing(false);
-                }, (error) => {
-                    console.error("Firestore sync error:", error);
-                    setSyncing(false);
-                });
+                }, (err) => { console.error("Firestore error:", err); setSyncing(false); });
 
                 return () => unsubscribe();
             }, [user, sessionId]);
 
             const saveToCloud = async (newData) => {
-                if (!user || !firebaseConfig || !window.FirebaseSDK) return;
+                if (!user || !window.FirebaseStore) return;
+                setSyncing(true);
                 try {
-                    const { getFirestore, doc, setDoc } = window.FirebaseSDK;
+                    const { getFirestore, doc, setDoc } = window.FirebaseStore;
                     const db = getFirestore();
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
                     await setDoc(docRef, newData);
-                } catch (e) { console.error("Error saving:", e); }
+                } catch (e) { console.error("Cloud save failed:", e); } finally { setSyncing(false); }
             };
 
-            const playerColors = [
-                { card: theme === 'dark' ? 'bg-blue-900/20' : 'bg-blue-50', bar: 'bg-blue-500', btn: 'bg-blue-600' },
-                { card: theme === 'dark' ? 'bg-red-900/20' : 'bg-red-50', bar: 'bg-red-500', btn: 'bg-red-600' },
-                { card: theme === 'dark' ? 'bg-emerald-900/20' : 'bg-emerald-50', bar: 'bg-emerald-500', btn: 'bg-emerald-600' },
-                { card: theme === 'dark' ? 'bg-amber-900/20' : 'bg-amber-50', bar: 'bg-amber-500', btn: 'bg-amber-600' },
-                { card: theme === 'dark' ? 'bg-fuchsia-900/20' : 'bg-fuchsia-50', bar: 'bg-fuchsia-500', btn: 'bg-fuchsia-600' },
-                { card: theme === 'dark' ? 'bg-indigo-900/20' : 'bg-indigo-50', bar: 'bg-indigo-500', btn: 'bg-indigo-600' },
-                { card: theme === 'dark' ? 'bg-orange-900/20' : 'bg-orange-50', bar: 'bg-orange-500', btn: 'bg-orange-600' },
-                { card: theme === 'dark' ? 'bg-teal-900/20' : 'bg-teal-50', bar: 'bg-teal-500', btn: 'bg-teal-600' },
-            ];
+            const handleUpdate = (newData) => {
+                setGameData(newData);
+                saveToCloud(newData);
+            };
 
             const updateScore = (mode, id, delta) => {
                 if (winner) return;
@@ -213,32 +225,27 @@
                 } else {
                     newData.playersDen = gameData.playersDen.map(p => p.id === id ? { ...p, score: p.score + delta } : p);
                 }
-                setGameData(newData);
-                saveToCloud(newData);
+                handleUpdate(newData);
             };
 
             const editName = (mode, id, newName) => {
                 const newData = { ...gameData };
                 if (mode === '1vs1') newData.players1vs1 = gameData.players1vs1.map(p => p.id === id ? { ...p, name: newName } : p);
                 else newData.playersDen = gameData.playersDen.map(p => p.id === id ? { ...p, name: newName } : p);
-                setGameData(newData);
-                saveToCloud(newData);
+                handleUpdate(newData);
             };
 
             const addPlayerDen = () => {
-                const newId = Date.now();
                 const newData = { ...gameData };
-                newData.playersDen = [...gameData.playersDen, { id: newId, name: `PLAYER ${String.fromCharCode(65 + gameData.playersDen.length)}`, score: 0, personal: 0 }];
-                setGameData(newData);
-                saveToCloud(newData);
+                newData.playersDen = [...gameData.playersDen, { id: Date.now(), name: `PLAYER ${String.fromCharCode(65 + gameData.playersDen.length)}`, score: 0, personal: 0 }];
+                handleUpdate(newData);
             };
 
             const removePlayerDen = (id) => {
                 if (gameData.playersDen.length <= 2) return;
                 const newData = { ...gameData };
                 newData.playersDen = gameData.playersDen.filter(p => p.id !== id);
-                setGameData(newData);
-                saveToCloud(newData);
+                handleUpdate(newData);
             };
 
             const resetAllData = () => {
@@ -250,80 +257,59 @@
                     playersDen: [{ id: 1, name: 'PLAYER A', score: 0, personal: 0 }, { id: 2, name: 'PLAYER B', score: 0, personal: 0 }, { id: 3, name: 'PLAYER C', score: 0, personal: 0 }]
                 };
                 setWinner(null);
-                setGameData(newData);
-                saveToCloud(newData);
+                handleUpdate(newData);
             };
 
             const recallData = () => {
                 if (!lastSessionBackup) return;
-                setGameData(lastSessionBackup);
-                saveToCloud(lastSessionBackup);
+                handleUpdate(lastSessionBackup);
                 setLastSessionBackup(null);
             };
 
-            const denSum = useMemo(() => gameData.playersDen.reduce((acc, p) => acc + p.score, 0), [gameData.playersDen]);
-            const isDenValid = denSum === 0;
-
             const billingData = useMemo(() => {
                 const players = gameData.gameMode === '1vs1' ? gameData.players1vs1 : gameData.playersDen;
-                const n = players.length;
                 if (gameData.gameMode === '1vs1') {
                     const [p1, p2] = players;
-                    let p1Table, p2Table;
+                    let p1T, p2T;
                     if (gameData.splitMode === 'equal' || p1.score === p2.score) {
-                        p1Table = p2Table = gameData.tableBill / 2;
+                        p1T = p2T = gameData.tableBill / 2;
                     } else {
                         const p1Win = p1.score > p2.score;
-                        p1Table = p1Win ? gameData.tableBill * 0.3 : gameData.tableBill * 0.7;
-                        p2Table = !p1Win ? gameData.tableBill * 0.3 : gameData.tableBill * 0.7;
+                        p1T = p1Win ? gameData.tableBill * 0.3 : gameData.tableBill * 0.7;
+                        p2T = !p1Win ? gameData.tableBill * 0.3 : gameData.tableBill * 0.7;
                     }
-                    return [
-                        { ...p1, tableShare: p1Table, total: p1Table + p1.personal },
-                        { ...p2, tableShare: p2Table, total: p2Table + p2.personal }
-                    ];
+                    return [{ ...p1, tableShare: p1T, total: p1T + p1.personal }, { ...p2, tableShare: p2T, total: p2T + p2.personal }];
                 } else {
-                    const tableShareEach = gameData.tableBill / n;
+                    const share = gameData.tableBill / players.length;
                     return players.map(p => ({
                         ...p,
-                        tableShare: tableShareEach,
+                        tableShare: share,
                         gameExchange: -(p.score * gameData.unitPrice),
-                        total: tableShareEach - (p.score * gameData.unitPrice) + p.personal
+                        total: share - (p.score * gameData.unitPrice) + p.personal
                     }));
                 }
             }, [gameData]);
 
-            // --- Sửa lỗi Copy Clipboard bằng execCommand ---
             const shareRoom = () => {
                 const url = window.location.href;
-                const textArea = document.createElement("textarea");
-                textArea.value = url;
-                textArea.style.position = "fixed";
-                textArea.style.left = "-9999px";
-                textArea.style.top = "0";
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
+                const t = document.createElement("textarea");
+                t.value = url;
+                document.body.appendChild(t);
+                t.select();
                 try {
                     document.execCommand('copy');
                     setShowCopied(true);
                     setTimeout(() => setShowCopied(false), 2000);
-                } catch (err) {
-                    console.error('Sao chép thất bại', err);
-                }
-                document.body.removeChild(textArea);
+                } catch (e) {}
+                document.body.removeChild(t);
             };
-
-            const themeClasses = theme === 'dark' ? 'bg-[#0a0510] text-slate-100' : 'bg-slate-50 text-slate-900';
-            const glassPanel = theme === 'dark' ? 'bg-white/[0.03] border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)]' : 'bg-white/70 border-slate-200 shadow-[0_8px_32px_rgba(0,0,0,0.05)]';
-            const subPanel = theme === 'dark' ? 'bg-black/40 border-white/5' : 'bg-white border border-slate-200';
 
             return (
                 <div className={`h-screen flex flex-col transition-colors duration-500 ${themeClasses} overflow-hidden`}>
                     
-                    {/* Toast Notification */}
                     {showCopied && (
                         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-cyan-600 text-white rounded-full text-xs font-bold shadow-xl toast-fade-in flex items-center gap-2">
-                            <Icon name="check" size={14} /> Link đã được sao chép!
+                            <Icon name="check" size={14} /> Link phòng đã được sao chép!
                         </div>
                     )}
 
@@ -334,14 +320,14 @@
                                 {syncing && <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>}
                             </div>
                             <div>
-                                <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent uppercase text-white md:text-inherit">PST Tool</h1>
-                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400 flex items-center gap-1">
-                                    ROOM: {sessionId} 
+                                <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent uppercase">PST LIVE</h1>
+                                <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400">
+                                    PHÒNG: {sessionId}
                                 </span>
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Copy Link to Share"><Icon name="share" size={18} /></button>
+                            <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Chia sẻ"><Icon name="share" size={18} /></button>
                             {lastSessionBackup && <button onClick={recallData} className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 animate-pulse"><Icon name="undo" size={18} /></button>}
                             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`p-2.5 rounded-2xl ${subPanel}`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} /></button>
                             <button onClick={resetAllData} className={`p-2.5 rounded-2xl ${subPanel} text-fuchsia-500`}><Icon name="refresh" size={18} /></button>
@@ -355,12 +341,12 @@
 
                     <main className="flex-1 flex flex-col overflow-hidden px-6 py-4">
                         {winner && (
-                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl p-6">
-                                <div className={`w-full max-w-sm p-12 rounded-[3.5rem] text-center border-2 border-fuchsia-500/30 ${glassPanel} glass-effect`}>
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-2xl p-6 text-center">
+                                <div className={`w-full max-w-sm p-12 rounded-[3.5rem] border-2 border-fuchsia-500/30 ${glassPanel} glass-effect`}>
                                     <div className="bg-fuchsia-600 w-24 h-24 rounded-[2rem] mx-auto flex items-center justify-center mb-8 shadow-2xl rotate-6"><Icon name="trophy" size={48} className="text-white" /></div>
-                                    <h2 className="text-4xl font-black mb-2 italic text-white uppercase text-center">Victory!</h2>
-                                    <p className="text-2xl text-fuchsia-400 font-bold uppercase mb-10 tracking-wider text-center">{winner}</p>
-                                    <button onClick={() => setWinner(null)} className="w-full py-5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white font-black rounded-3xl shadow-xl">BACK</button>
+                                    <h2 className="text-4xl font-black mb-2 italic text-white uppercase">Thắng cuộc!</h2>
+                                    <p className="text-2xl text-fuchsia-400 font-bold uppercase mb-10 tracking-wider">{winner}</p>
+                                    <button onClick={() => setWinner(null)} className="w-full py-5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white font-black rounded-3xl shadow-xl">TIẾP TỤC</button>
                                 </div>
                             </div>
                         )}
@@ -370,21 +356,21 @@
                                 <div className={`p-4 rounded-[2rem] flex flex-col items-center justify-center ${glassPanel} glass-effect border`}>
                                     <div className="flex flex-col items-center gap-3 w-full">
                                         <div className={`flex p-1 rounded-2xl w-32 ${subPanel}`}>
-                                            <button onClick={() => { const d = {...gameData, gameMode: '1vs1'}; setGameData(d); saveToCloud(d); }} className={`flex-1 py-2 rounded-xl flex justify-center ${gameData.gameMode === '1vs1' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="user" size={18} /></button>
-                                            <button onClick={() => { const d = {...gameData, gameMode: 'den'}; setGameData(d); saveToCloud(d); }} className={`flex-1 py-2 rounded-xl flex justify-center ${gameData.gameMode === 'den' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="users" size={18} /></button>
+                                            <button onClick={() => handleUpdate({...gameData, gameMode: '1vs1'})} className={`flex-1 py-2 rounded-xl flex justify-center ${gameData.gameMode === '1vs1' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="user" size={18} /></button>
+                                            <button onClick={() => handleUpdate({...gameData, gameMode: 'den'})} className={`flex-1 py-2 rounded-xl flex justify-center ${gameData.gameMode === 'den' ? 'bg-fuchsia-600 text-white shadow-lg' : 'opacity-40'}`}><Icon name="users" size={18} /></button>
                                         </div>
                                         {gameData.gameMode === '1vs1' ? (
                                             <div className="flex flex-col items-center gap-1">
                                                 <span className="text-[10px] font-black uppercase opacity-40">Race To</span>
                                                 <div className="flex items-center gap-10">
-                                                    <button onClick={() => { const d = {...gameData, raceTo: Math.max(1, gameData.raceTo - 1)}; setGameData(d); saveToCloud(d); }} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="minus" size={18} /></button>
+                                                    <button onClick={() => handleUpdate({...gameData, raceTo: Math.max(1, gameData.raceTo - 1)})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="minus" size={18} /></button>
                                                     <span className="text-6xl font-black text-fuchsia-500 drop-shadow-md">{gameData.raceTo}</span>
-                                                    <button onClick={() => { const d = {...gameData, raceTo: gameData.raceTo + 1}; setGameData(d); saveToCloud(d); }} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="plus" size={18} /></button>
+                                                    <button onClick={() => handleUpdate({...gameData, raceTo: gameData.raceTo + 1})} className={`w-10 h-10 rounded-xl flex items-center justify-center ${subPanel}`}><Icon name="plus" size={18} /></button>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-4">
-                                                <span className={`text-xs font-black uppercase ${isDenValid ? 'text-green-500' : 'text-red-500'}`}>{isDenValid ? 'Verified' : `Diff: ${denSum}`}</span>
+                                                <span className={`text-xs font-black uppercase ${ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'text-green-500' : 'text-red-500'}`}>{ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'Hợp lệ' : `Lệch: ${gameData.playersDen.reduce((acc, p) => acc + p.score, 0)}`}</span>
                                                 <button onClick={addPlayerDen} className="w-10 h-10 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-lg"><Icon name="plus" size={20} /></button>
                                             </div>
                                         )}
@@ -416,35 +402,35 @@
                         )}
 
                         {activeView === 'bill' && (
-                            <div className="flex-1 overflow-y-auto space-y-6 pb-10 pr-1">
+                            <div className="flex-1 overflow-y-auto space-y-6 pb-10 pr-1 text-center">
                                 <section className={`rounded-[2.5rem] overflow-hidden ${glassPanel} border`}>
                                     <div className="p-8 space-y-6 border-b border-white/5">
-                                        <div className="flex items-center gap-4 mb-2"><Icon name="calc" className="text-cyan-600" /> <h3 className="text-xl font-black uppercase text-slate-600">Settlement</h3></div>
+                                        <div className="flex items-center gap-4 mb-2 text-slate-700 justify-center"><Icon name="calc" className="text-cyan-600" /> <h3 className="text-xl font-black uppercase">Quyết toán</h3></div>
                                         <div className="space-y-5">
-                                            <div>
-                                                <label className="text-[10px] font-black uppercase opacity-40 mb-1 block ml-1">Hourly Fee (x1,000 VND)</label>
+                                            <div className="text-left">
+                                                <label className="text-[10px] font-black uppercase opacity-40 mb-1 block ml-1">Tiền giờ (x1,000 VND)</label>
                                                 <div className="relative">
                                                     <span className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 text-cyan-600 font-black">k</span>
-                                                    <input type="number" value={gameData.tableBill / 1000 || ''} onChange={(e) => { const d = {...gameData, tableBill: (parseInt(e.target.value) || 0) * 1000}; setGameData(d); saveToCloud(d); }} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} placeholder="40" />
+                                                    <input type="number" value={gameData.tableBill / 1000 || ''} onChange={(e) => handleUpdate({...gameData, tableBill: (parseInt(e.target.value) || 0) * 1000})} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} placeholder="40" />
                                                     <span className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20 font-black text-[10px]">.000đ</span>
                                                 </div>
                                             </div>
                                             {gameData.gameMode === 'den' ? (
-                                                <div>
-                                                    <label className="text-[10px] font-black uppercase opacity-40 mb-1 block ml-1">Value Per Point (x1,000 VND)</label>
+                                                <div className="text-left">
+                                                    <label className="text-[10px] font-black uppercase opacity-40 mb-1 block ml-1">Tiền cược/điểm (x1,000 VND)</label>
                                                     <div className="relative">
                                                         <span className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 text-cyan-600 font-black">k</span>
-                                                        <input type="number" value={gameData.unitPrice / 1000 || ''} onChange={(e) => { const d = {...gameData, unitPrice: (parseInt(e.target.value) || 0) * 1000}; setGameData(d); saveToCloud(d); }} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} />
+                                                        <input type="number" value={gameData.unitPrice / 1000 || ''} onChange={(e) => handleUpdate({...gameData, unitPrice: (parseInt(e.target.value) || 0) * 1000})} className={`w-full py-4 pl-12 pr-16 rounded-2xl font-black text-xl focus:outline-none ${subPanel}`} />
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div>
-                                                    <label className="text-[10px] font-black uppercase opacity-40 mb-1 block ml-1">Split Policy</label>
-                                                    <select value={gameData.splitMode} onChange={(e) => { const d = {...gameData, splitMode: e.target.value}; setGameData(d); saveToCloud(d); }} className={`w-full py-4 px-6 rounded-2xl font-black text-lg focus:outline-none appearance-none ${subPanel}`}><option value="73">70/30 (W:30/L:70)</option><option value="equal">50/50 (Fair Share)</option></select>
+                                                <div className="text-left">
+                                                    <label className="text-[10px] font-black uppercase opacity-40 mb-1 block ml-1">Phương thức chia</label>
+                                                    <select value={gameData.splitMode} onChange={(e) => handleUpdate({...gameData, splitMode: e.target.value})} className={`w-full py-4 px-6 rounded-2xl font-black text-lg focus:outline-none appearance-none ${subPanel}`}><option value="73">70/30 (Thắng:30/Thua:70)</option><option value="equal">Chia đều 50/50</option></select>
                                                 </div>
                                             )}
-                                            <div>
-                                                <label className="text-[10px] font-black uppercase opacity-40 mb-2 block ml-1">Individual Expenses (x1,000 VND)</label>
+                                            <div className="text-left">
+                                                <label className="text-[10px] font-black uppercase opacity-40 mb-2 block ml-1">Chi phí riêng (Nước/Mồi...)</label>
                                                 <div className="space-y-2">
                                                     {(gameData.gameMode === '1vs1' ? gameData.players1vs1 : gameData.playersDen).map(p => (
                                                         <div key={p.id} className={`flex items-center gap-4 p-3 rounded-xl ${subPanel}`}>
@@ -455,8 +441,7 @@
                                                                     let newData = { ...gameData };
                                                                     if(gameData.gameMode === '1vs1') newData.players1vs1 = gameData.players1vs1.map(x => x.id === p.id ? {...x, personal: val} : x);
                                                                     else newData.playersDen = gameData.playersDen.map(x => x.id === p.id ? {...x, personal: val} : x);
-                                                                    setGameData(newData);
-                                                                    saveToCloud(newData);
+                                                                    handleUpdate(newData);
                                                                 }} className="w-full bg-transparent text-right pr-4 font-black text-cyan-600 focus:outline-none text-lg" placeholder="0" />
                                                                 <span className="absolute right-0 top-1/2 -translate-y-1/2 opacity-20 font-black text-[9px]">k</span>
                                                             </div>
@@ -471,18 +456,18 @@
                                         {billingData.map((p, idx) => {
                                             const color = playerColors[idx % playerColors.length];
                                             return (
-                                                <div key={p.id} className={`p-5 rounded-[1.5rem] flex flex-col gap-3 border ${theme === 'dark' ? 'bg-white/[0.02]' : 'bg-white/80 shadow-sm'}`}>
-                                                    <div className="flex justify-between items-center"><span className="text-xs font-black uppercase opacity-40">{p.name}</span><span className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{p.total.toLocaleString()}đ</span></div>
+                                                <div key={p.id} className={`p-5 rounded-[1.5rem] flex flex-col gap-3 border ${theme === 'dark' ? 'bg-white/[0.02]' : 'bg-white/80 shadow-sm'} text-left`}>
+                                                    <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase opacity-40">{p.name}</span><span className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{p.total.toLocaleString()}đ</span></div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        <div className="px-2 py-1 bg-slate-200/50 rounded-lg text-[8px] font-bold uppercase tracking-wider">Table: {Math.round(p.tableShare).toLocaleString()}</div>
-                                                        {p.personal > 0 && <div className="px-2 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[8px] font-bold uppercase tracking-wider">Extras: {p.personal.toLocaleString()}</div>}
-                                                        {p.gameExchange !== undefined && p.gameExchange !== 0 && <div className={`px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-wider ${p.gameExchange > 0 ? 'bg-red-500/10 text-red-500' : 'bg-fuchsia-500/10 text-fuchsia-600'}`}>{p.gameExchange > 0 ? `Loss: +${p.gameExchange.toLocaleString()}` : `Gain: ${p.gameExchange.toLocaleString()}`}</div>}
+                                                        <div className="px-2 py-1 bg-slate-200/50 rounded-lg text-[8px] font-bold">Tiền giờ: {Math.round(p.tableShare).toLocaleString()}</div>
+                                                        {p.personal > 0 && <div className="px-2 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[8px] font-bold uppercase">Riêng: {p.personal.toLocaleString()}</div>}
+                                                        {p.gameExchange !== undefined && p.gameExchange !== 0 && <div className={`px-2 py-1 rounded-lg text-[8px] font-bold ${p.gameExchange > 0 ? 'bg-red-500/10 text-red-500' : 'bg-fuchsia-500/10 text-fuchsia-600'}`}>{p.gameExchange > 0 ? `Đền: +${p.gameExchange.toLocaleString()}` : `Thắng: ${p.gameExchange.toLocaleString()}`}</div>}
                                                     </div>
                                                 </div>
                                             );
                                         })}
                                         <div className="bg-gradient-to-br from-emerald-500 to-emerald-800 mt-6 p-6 rounded-[2rem] flex items-center justify-between text-white shadow-xl">
-                                            <div className="flex flex-col"><span className="text-[8px] font-black uppercase opacity-70">Total Due</span><span className="text-3xl font-black italic tracking-tighter">{Math.round(billingData.reduce((acc, p) => acc + p.total, 0)).toLocaleString()}đ</span></div>
+                                            <div className="flex flex-col text-left"><span className="text-[8px] font-black uppercase opacity-70">Tổng cộng</span><span className="text-3xl font-black italic tracking-tighter">{Math.round(billingData.reduce((acc, p) => acc + p.total, 0)).toLocaleString()}đ</span></div>
                                             <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md"><Icon name="check" size={24} /></div>
                                         </div>
                                     </div>
