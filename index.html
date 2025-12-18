@@ -47,28 +47,29 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Global Helpers ---
+        // --- Helpers ---
+        const generateRoomId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+        
         const getSessionId = () => {
-            try {
-                return window.location.hash.replace('#', '') || 'lobby';
-            } catch (e) {
-                return 'lobby';
+            const hash = window.location.hash.replace('#', '');
+            if (!hash) {
+                const newId = generateRoomId();
+                window.location.hash = newId;
+                return newId;
             }
+            return hash;
         };
 
-        // --- Cấu hình Firebase an toàn ---
+        // --- Firebase Config ---
         let firebaseConfig = null;
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             }
-        } catch (e) {
-            console.warn("Firebase config not available. Running in Local Mode.");
-        }
+        } catch (e) { console.warn("Firebase config not available."); }
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'pst-tool-v2';
 
-        // Định nghĩa Icon SVG
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 plus: <path d="M12 5v14M5 12h14" />,
@@ -94,10 +95,7 @@
         };
 
         const App = () => {
-            // --- UI STATES ---
             const [theme, setTheme] = useState('light');
-            
-            // --- UI CONSTANTS (Moved to top to prevent ReferenceError) ---
             const themeClasses = theme === 'dark' ? 'bg-[#0a0510] text-slate-100' : 'bg-slate-50 text-slate-900';
             const glassPanel = theme === 'dark' ? 'bg-white/[0.03] border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)]' : 'bg-white/70 border-slate-200 shadow-[0_8px_32px_rgba(0,0,0,0.05)]';
             const subPanel = theme === 'dark' ? 'bg-black/40 border-white/5' : 'bg-white border border-slate-200';
@@ -119,7 +117,6 @@
             const [syncing, setSyncing] = useState(false);
             const [showCopied, setShowCopied] = useState(false);
 
-            // --- SYNC STATES ---
             const [user, setUser] = useState(null);
             const [sessionId, setSessionId] = useState(getSessionId());
 
@@ -140,7 +137,7 @@
                 ]
             });
 
-            // Firebase Logic
+            // Effect: Initialize Firebase Auth
             useEffect(() => {
                 if (!firebaseConfig || !window.FirebaseCore) return;
                 const { initializeApp } = window.FirebaseCore;
@@ -156,7 +153,7 @@
                         } else {
                             await signInAnonymously(auth);
                         }
-                    } catch (e) { console.error("Auth init error:", e); }
+                    } catch (e) { console.error("Auth error:", e); }
                 };
 
                 initAuth();
@@ -171,6 +168,7 @@
                 };
             }, []);
 
+            // Effect: Listen to Room Data
             useEffect(() => {
                 if (!user || !window.FirebaseStore) return;
                 const { getFirestore, doc, onSnapshot, setDoc } = window.FirebaseStore;
@@ -181,12 +179,15 @@
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        setGameData(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
+                        // Tránh loop vô tận bằng cách so sánh stringify
+                        if (JSON.stringify(data) !== JSON.stringify(gameData)) {
+                            setGameData(data);
+                        }
                     } else {
                         setDoc(docRef, gameData);
                     }
                     setSyncing(false);
-                }, (err) => { console.error("Firestore error:", err); setSyncing(false); });
+                }, (err) => { console.error("Firestore listen error:", err); setSyncing(false); });
 
                 return () => unsubscribe();
             }, [user, sessionId]);
@@ -280,7 +281,7 @@
                     }
                     return [{ ...p1, tableShare: p1T, total: p1T + p1.personal }, { ...p2, tableShare: p2T, total: p2T + p2.personal }];
                 } else {
-                    const share = gameData.tableBill / players.length;
+                    const share = gameData.tableBill / (players.length || 1);
                     return players.map(p => ({
                         ...p,
                         tableShare: share,
@@ -291,7 +292,7 @@
             }, [gameData]);
 
             const shareRoom = () => {
-                const url = window.location.href;
+                const url = window.location.href; // URL đã có sẵn mã băm #ROOM_ID
                 const t = document.createElement("textarea");
                 t.value = url;
                 document.body.appendChild(t);
@@ -305,11 +306,11 @@
             };
 
             return (
-                <div className={`h-screen flex flex-col transition-colors duration-500 ${themeClasses} overflow-hidden`}>
+                <div className={`h-screen flex flex-col transition-colors duration-500 ${theme === 'dark' ? 'bg-[#0a0510] text-slate-100' : 'bg-slate-50 text-slate-900'} overflow-hidden`}>
                     
                     {showCopied && (
                         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-cyan-600 text-white rounded-full text-xs font-bold shadow-xl toast-fade-in flex items-center gap-2">
-                            <Icon name="check" size={14} /> Link phòng đã được sao chép!
+                            <Icon name="check" size={14} /> Đã sao chép link bàn chơi!
                         </div>
                     )}
 
@@ -320,14 +321,14 @@
                                 {syncing && <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>}
                             </div>
                             <div>
-                                <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent uppercase">PST LIVE</h1>
+                                <h1 className="text-lg font-black tracking-tighter leading-none bg-gradient-to-r from-fuchsia-500 to-cyan-400 bg-clip-text text-transparent uppercase">PST Tool</h1>
                                 <span className="text-[9px] font-black tracking-[0.25em] opacity-40 uppercase text-slate-400">
-                                    PHÒNG: {sessionId}
+                                    BÀN: {sessionId}
                                 </span>
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Chia sẻ"><Icon name="share" size={18} /></button>
+                            <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Chia sẻ bàn"><Icon name="share" size={18} /></button>
                             {lastSessionBackup && <button onClick={recallData} className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 animate-pulse"><Icon name="undo" size={18} /></button>}
                             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`p-2.5 rounded-2xl ${subPanel}`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} /></button>
                             <button onClick={resetAllData} className={`p-2.5 rounded-2xl ${subPanel} text-fuchsia-500`}><Icon name="refresh" size={18} /></button>
