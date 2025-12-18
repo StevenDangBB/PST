@@ -63,8 +63,20 @@
             return hash;
         };
 
-        // --- Configuration ---
+        // --- CONFIGURATION ZONE ---
+        // BƯỚC QUAN TRỌNG: Dán config Firebase của bạn thay cho giá trị null ở dưới để mọi người dùng chung
+        // Ví dụ: const EMBEDDED_FIREBASE_CONFIG = { apiKey: "AIza...", ... };
+        const EMBEDDED_FIREBASE_CONFIG = const firebaseConfig = {
+          apiKey: "AIzaSyD2F3eHYFkTpzVQQ0IvLmh8-8ieJKR4XQ4",
+          authDomain: "pst-tool.firebaseapp.com",
+          projectId: "pst-tool",
+          storageBucket: "pst-tool.firebasestorage.app",
+          messagingSenderId: "660912727646",
+          appId: "1:660912727646:web:4817123c8df674aa57f6cf"
+        };
+
         const getFirebaseConfig = () => {
+            if (EMBEDDED_FIREBASE_CONFIG) return EMBEDDED_FIREBASE_CONFIG; // Ưu tiên config nhúng sẵn
             const localConfig = localStorage.getItem('pst_firebase_config');
             if (localConfig) return JSON.parse(localConfig);
             if (typeof window.__firebase_config !== 'undefined' && window.__firebase_config) {
@@ -277,7 +289,6 @@
                         cleanedInput = cleanedInput.substring(firstBrace, lastBrace + 1);
                     }
                     
-                    // Simple cleaning for JS objects
                     if (!cleanedInput.includes('"')) {
                          cleanedInput = cleanedInput
                             .replace(/(\w+):/g, '"$1":') 
@@ -492,7 +503,7 @@
                                         ) : (
                                             <div className="flex items-center gap-4">
                                                 <span className={`text-xs font-black uppercase ${ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'text-green-500' : 'text-red-500'}`}>{ (gameData.playersDen.reduce((acc, p) => acc + p.score, 0)) === 0 ? 'Balanced' : `Diff: ${gameData.playersDen.reduce((acc, p) => acc + p.score, 0)}`}</span>
-                                                <button onClick={addPlayerDen} className="w-10 h-10 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-lg"><Icon name="plus" size={20} /></button>
+                                                <button onClick={addPlayerDen} className="w-10 h-10 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-lg"><Icon name="userPlus" size={20} /></button>
                                             </div>
                                         )}
                                     </div>
