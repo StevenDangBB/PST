@@ -43,7 +43,7 @@
         .loading-spinner { border: 3px solid rgba(255, 255, 255, 0.1); border-left-color: #d946ef; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Hiệu ứng Neon Pulse cho Race To */
+        /* Hiệu ứng Neon Pulse cho Race To - Tương phản mạnh */
         @keyframes neon-pulse {
             0%, 100% { 
                 text-shadow: 0 0 15px rgba(217, 70, 239, 0.6), 0 0 30px rgba(217, 70, 239, 0.4); 
@@ -87,7 +87,7 @@
         };
 
         const getFirebaseConfig = () => {
-            if (EMBEDDED_FIREBASE_CONFIG) return EMBEDDED_FIREBASE_CONFIG;
+            if (EMBEDDED_FIREBASE_CONFIG) return EMBEDDED_FIREBASE_CONFIG; // Ưu tiên config nhúng sẵn
             const localConfig = localStorage.getItem('pst_firebase_config');
             if (localConfig) return JSON.parse(localConfig);
             if (typeof window.__firebase_config !== 'undefined' && window.__firebase_config) {
@@ -181,18 +181,47 @@
         };
 
         // --- TeamPlayerCard: Removed Drag & Drop, Added Manage Mode Logic ---
-        const TeamPlayerCard = ({ player, index, updateScore, editName, autoBalance, removePlayerDen, color, isManageMode, movePlayer }) => {
+        const TeamPlayerCard = ({ player, index, updateScore, editName, autoBalance, removePlayerDen, color, isManageMode, movePlayer, gameData }) => {
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+            const [showBalanceConfirm, setShowBalanceConfirm] = useState(false);
+
+            // Calculate Diff
+            const currentTotal = gameData.playersDen.reduce((acc, p) => acc + p.score, 0);
+            const adjustment = -currentTotal;
+            const newScore = player.score + adjustment;
 
             return (
                 <>
+                    {/* Delete Confirmation Modal */}
                     {showDeleteConfirm && (
                         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl w-full max-w-sm text-center shadow-2xl">
+                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl w-full max-w-sm text-center shadow-2xl animate-in zoom-in duration-200">
+                                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Icon name="trash" size={32} />
+                                </div>
                                 <h3 className="text-xl font-black mb-2 dark:text-white">Delete {player.name}?</h3>
                                 <div className="flex gap-3 mt-4">
                                     <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancel</button>
                                     <button onClick={() => { removePlayerDen(player.id); setShowDeleteConfirm(false); }} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-500/30">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Auto Balance Confirmation Modal */}
+                    {showBalanceConfirm && (
+                        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl w-full max-w-sm text-center shadow-2xl animate-in zoom-in duration-200">
+                                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Icon name="calc" size={32} />
+                                </div>
+                                <h3 className="text-xl font-black mb-2 dark:text-white">Auto Balance?</h3>
+                                <p className="text-sm text-slate-500 mb-6">
+                                    Adjust <strong>{player.name}</strong> from <strong className="text-slate-800 dark:text-slate-200">{player.score}</strong> to <strong className="text-blue-600">{newScore}</strong> to fix the discrepancy of <strong>{currentTotal}</strong>?
+                                </p>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowBalanceConfirm(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancel</button>
+                                    <button onClick={() => { autoBalance(player.id); setShowBalanceConfirm(false); }} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30">Confirm</button>
                                 </div>
                             </div>
                         </div>
@@ -226,7 +255,12 @@
                                 />
 
                                 <button 
-                                    onClick={() => !isManageMode && autoBalance(player.id)}
+                                    onClick={() => {
+                                        if (!isManageMode) {
+                                            if (currentTotal === 0) return; // Already balanced
+                                            setShowBalanceConfirm(true);
+                                        }
+                                    }}
                                     disabled={isManageMode}
                                     className={`text-6xl md:text-7xl font-black tabular-nums transition-all leading-none ${isManageMode ? 'opacity-50' : 'active:scale-95'} ${player.score < 0 ? 'text-red-500' : player.score > 0 ? color.text.replace('text-', 'text-') : 'opacity-20'}`}
                                 >
