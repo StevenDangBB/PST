@@ -133,8 +133,8 @@
         }
 
         @keyframes crown-float {
-            0%, 100% { transform: translate(-50%, 0) scale(1) rotate(-5deg); }
-            50% { transform: translate(-50%, -10px) scale(1.05) rotate(5deg); }
+            0%, 100% { transform: translate(-50%, 0) scale(1) rotate(-5deg); filter: drop-shadow(0 0 10px rgba(234, 179, 8, 0.5)); }
+            50% { transform: translate(-50%, -10px) scale(1.05); filter: drop-shadow(0 0 20px rgba(234, 179, 8, 0.8)); }
         }
         
         .grand-crown-container {
@@ -170,22 +170,17 @@
             to { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
         }
 
-        /* 10. Gold Plated Text (Optimized for Contrast) */
+        /* 10. Gold Plated Text */
         .winner-badge {
-            /* High Contrast: Gradient Gold Text + Black Stroke */
             background: linear-gradient(180deg, #FFFFFF 20%, #FFD700 50%, #B8860B 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            /* Fallback shadow if text-stroke not fully supported or to add depth */
             filter: drop-shadow(0 2px 0px #000000); 
-            
             font-weight: 900;
             letter-spacing: 0.3em;
             text-transform: uppercase;
             font-size: 1rem;
             margin-top: 0.25rem;
-            
-            /* Add content outline trick for sharpness if needed, but drop-shadow #000 usually works well */
         }
         
         .loser-dimmed {
@@ -302,7 +297,8 @@
                 grip: (<><circle cx="9" cy="12" r="1" /><circle cx="9" cy="5" r="1" /><circle cx="9" cy="19" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="5" r="1" /><circle cx="15" cy="19" r="1" /></>),
                 x: <path d="M18 6L6 18M6 6l12 12" strokeWidth="3" strokeLinecap="round" />,
                 filter: <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />,
-                crown: (<><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5z" /></>)
+                crown: (<><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5z" /></>),
+                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -736,6 +732,46 @@
                 return () => clearInterval(interval);
             }, [winner]);
 
+            const handleExportCSV = () => {
+                const BOM = "\uFEFF";
+                let csvContent = BOM + `Ngày xuất,${new Date().toLocaleString('vi-VN')}\n`;
+                csvContent += `Mã phòng,${sessionId}\n`;
+                csvContent += `Chế độ chơi,${gameData.gameMode === '1vs1' ? '1 vs 1' : 'Đánh Đền'}\n`;
+                
+                if (gameData.gameMode === '1vs1') {
+                    csvContent += `Race To,${gameData.raceTo}\n`;
+                    csvContent += `Chia tiền giờ,${gameData.splitMode === 'equal' ? '50/50' : '70/30'}\n`;
+                } else {
+                    csvContent += `Tiền một điểm,${gameData.unitPrice}\n`;
+                }
+                
+                csvContent += `Tổng tiền giờ,${gameData.tableBill}\n\n`;
+
+                csvContent += "Tên cơ thủ,Điểm số,Tiền giờ,Phụ thu,Tiền độ (Thắng/Thua),Tổng phải trả\n";
+                
+                billingData.forEach(p => {
+                    const gm = p.gameExchange !== undefined ? p.gameExchange : 0;
+                    csvContent += `"${p.name}",${p.score},${p.tableShare},${p.personal},${gm},${p.total}\n`;
+                });
+
+                csvContent += `\nTổng cộng thu,,${billingData.reduce((acc, p) => acc + p.tableShare, 0)},${billingData.reduce((acc, p) => acc + p.personal, 0)},,${billingData.reduce((acc, p) => acc + p.total, 0)}\n`;
+
+                csvContent += "\n\n--- Lịch sử trận đấu ---\n";
+                csvContent += "Thời gian,Nội dung\n";
+                (gameData.history || []).forEach(h => {
+                     csvContent += `${h.time},"${h.text}"\n`;
+                });
+
+                const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `PST_Bill_${sessionId}_${Date.now()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
             const editName = (mode, id, newName) => {
                 const newData = { ...gameData };
                 if (mode === '1vs1') newData.players1vs1 = gameData.players1vs1.map(p => p.id === id ? { ...p, name: newName } : p);
@@ -1008,6 +1044,7 @@
                                 <button onClick={shareRoom} className={`p-2.5 rounded-2xl ${subPanel}`} title="Share Room"><Icon name="share" size={18} /></button>
                                 {lastSessionBackup && <button onClick={recallData} className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 animate-pulse"><Icon name="undo" size={18} /></button>}
                                 <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`p-2.5 rounded-2xl ${subPanel}`}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} /></button>
+                                <button onClick={handleExportCSV} className={`p-2.5 rounded-2xl ${subPanel} text-green-500`} title="Export CSV"><Icon name="download" size={18} /></button>
                                 <button onClick={resetAllData} className={`p-2.5 rounded-2xl ${subPanel} text-fuchsia-500`}><Icon name="refresh" size={18} /></button>
                             </div>
                         )}
